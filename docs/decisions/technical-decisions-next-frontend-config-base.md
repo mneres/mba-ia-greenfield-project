@@ -161,6 +161,9 @@ One key, public, used both server and client. Works only when a reverse proxy / 
 
 **Decision:** **A (Strict BFF — single server-only `API_URL`)**
 
+**Revisions:**
+- 2026-08-30 — Strict BFF is scoped to API traffic: the rule governs calls to the NestJS API, not opaque signed media URLs. `phase-03-videos/TD-12` and `TD-13` have the browser fetch video bytes directly from the object-storage origin via short-lived presigned URLs; the BFF still mediates authorization by deciding whether to issue one, and the C4 container diagram already draws the Frontend→Object Storage streaming edge. Upload remains same-origin (see `phase-03-videos/TD-03`). Option A is unchanged. Rationale: Strict-BFF scoped to API traffic; signed media URLs excluded.
+
 ---
 
 ## Initial canonical env-key set (informative — consequence of TD-01..TD-03)
