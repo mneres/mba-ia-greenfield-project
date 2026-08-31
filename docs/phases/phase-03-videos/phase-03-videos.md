@@ -166,8 +166,8 @@ Deliver the backend for large-file video ingest and automatic processing in `nes
 
 ### SI-03.6 — Expor ingest tus com autorização, quota e pré-cadastro
 
-**Route:** ALL /videos/upload/*
-**Test Specs:** _pending /plan-test-specs_
+**Route:** POST /videos/upload (criação; HEAD/PATCH/DELETE do protocolo tus na mesma rota, montada como `@All('videos/upload/*')`)
+**Test Specs:** see `nestjs-project/specs/videos-upload.plan.md`
 **Authorization:** Authenticated (per `## Technical Specifications` → `### Authorization Matrix`)
 
 **Description:** Montar o servidor tus como rota de controller Nest, de modo que o pipeline de guards continue ativo, e usar os hooks do protocolo para criar o rascunho e barrar uploads acima da cota antes que qualquer byte seja gravado.
@@ -290,7 +290,7 @@ Cenários E2E do protocolo tus completo são authored externamente por `/plan-te
 ### SI-03.10 — Expor endpoints de playback e download
 
 **Route:** GET /videos/{publicId}/playback, GET /videos/{publicId}/download
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-delivery.plan.md`
 **Authorization:** Anonymous quando `status = ready`; Owner em qualquer status (per `## Technical Specifications` → `### Authorization Matrix`)
 
 **Description:** Entregar as duas URLs presignadas que colocam o cliente em contato direto com o storage, com o acesso barrado por estado do recurso em vez de identidade.
