@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 2/11 completed
+**SIs:** 3/11 completed
 
 ### SI-03.1 — Provisionar infraestrutura de storage e fila
 - **Status:** completed
@@ -22,9 +22,16 @@
   - `getObjectBuffer` usa `result.Body!.transformToByteArray()`. O `!` é necessário porque o SDK tipa `Body` como opcional; numa resposta 200 de `GetObject` ele está sempre presente. Vale trocar por narrowing explícito se a regra de strict-null apertar.
 
 ### SI-03.3 — Criar entidade Video e migration
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 43 passing (2 fix attempts)
+- **Observations:**
+  - O banco de dev estava com resíduo de `synchronize`: as 4 tabelas existiam mas a tabela `migrations` tinha 0 linhas, então `migration:run` abortava com "relation channels already exists". Segui a recuperação documentada em `.claude/rules/typeorm-migrations.md` — **com aprovação explícita do usuário, porque destruía 21 linhas** (2 users, 2 channels, 15 refresh_tokens, 2 verification_tokens; pelo formato, resíduo de suíte de teste).
+  - **A causa raiz do resíduo continua ativa:** `createTestDataSource` usa `synchronize: true` por padrão, então toda spec de entidade recria tabelas por fora do runner de migration. O mesmo estado vai se formar de novo na próxima máquina de dev. Vale uma task separada.
+  - Duas correções no teardown do `migrations.integration-spec.ts`, ambas bugs latentes desde a fase 02 que a entrada de `videos` tornou determinísticos: (1) `Promise.all` sobre `DROP ... CASCADE` em tabelas ligadas por FK adquire locks em ordens diferentes e o Postgres aborta com deadlock — serializado; (2) `DROP TABLE ... CASCADE` **não** derruba tipos enum no Postgres, então `verification_tokens_type_enum` sobrevivia e fazia o `CREATE TYPE` do próximo `runMigrations()` falhar — varredura dinâmica de `pg_type` em vez de lista fixa.
+  - `duration` (numeric) e `size_bytes` (bigint) voltam como string no driver pg; ambos passam por transformer para chegar como `number`. Sem isso a conversão vazaria para todo consumidor em SI-03.9 e SI-03.10.
+  - Transição inválida lança `Error` comum, não `DomainException`. `DomainException` é abstrata e nenhum endpoint desta fase deixa o cliente pedir transição arbitrária — logo é erro de programação e `INVALID_VIDEO_TRANSITION` não pertence ao Error Catalog.
+  - Dois arquivos fora dos nomeados pelo SI: `Channel` ganhou o lado inverso `videos` (o Data Model especifica o one-to-many e o callback do `@ManyToOne` exige) e `cleanAllTables` passou a limpar `videos` antes de `channels` (ordem da FK). Ambos exigidos pelo contrato.
+  - **Jest não encerra sozinho após reportar** (open handles) — a execução anterior consumiu os 600s do timeout apesar de os testes terminarem em 4s. Provável `DataSource` não destruído quando uma suíte falha antes do `afterAll`. Fora do escopo deste SI, mas é um imposto em toda rodada de teste.
 
 ### SI-03.4 — Implementar gerador de identificador público
 - **Status:** pending
