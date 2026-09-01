@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 4/11 completed
+**SIs:** 5/11 completed
 
 ### SI-03.1 — Provisionar infraestrutura de storage e fila
 - **Status:** completed
@@ -47,9 +47,16 @@
   - **`npm run lint` não passa no repositório, e não passava antes desta fase:** 119 erros no HEAD, 113 agora. Nenhum introduzido aqui; os 6 a menos são 5 violações de Prettier dos SI-03.1/03.2/03.3 e um import morto. O grosso está em arquivos de teste da fase 02 (`auth.service.spec.ts` 45, `mail.service.integration-spec.ts` 16, `channels.service.spec.ts` 15, `env.validation.integration-spec.ts` 14). O critério 4 da Definition of Done está descumprido desde antes da fase 03 e precisa de uma task própria.
 
 ### SI-03.5 — Registrar fila de processamento (lado produtor)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 223 unit+integration passing (31 suites) + 52 e2e passing; 2 fix attempts
+- **Observations:**
+  - **`@nestjs/bullmq@12` é `type: module` — ESM puro — e quebra o transform CJS do ts-jest** (`SyntaxError: Unexpected token 'export'`). O Node 25 do container aceita `require(esm)`, então a aplicação subiria e o problema só apareceria na suíte. Fixado em `^11.0.5`, que é CJS, mantém `extraOptions.manualRegistration` (verificado no `.d.ts` instalado) e cujo peer range aceita `bullmq ^6`. É a mesma restrição que TD-06 já havia ratificado ao recusar `nanoid` v6 — vale registrar que ela agora vinculou a versão de um segundo pacote, e vai vincular outros enquanto o backend for CommonJS.
+  - **`bullmq@6` tornou o `ioredis` peer opcional** (na v5 era dependência direta): sem instalá-lo explicitamente, toda construção de `Queue` falha com "BullMQ could not load the optional 'ioredis' package". Adicionado como dependência direta.
+  - O teste de deduplicação foi conferido contra a implementação sem a opção: 2 jobs sem `deduplication`, 1 com. Não passa por vacuidade.
+  - AC #2 ("o processo da API não instancia nenhum Worker") **é estrutural, não observável por teste direto**: vem de `manualRegistration: true` no `forRoot` somado à ausência do array `processors` no `registerQueue`. O teste cobre a parte observável — um job enfileirado continua em `waiting` e nunca vai para `active`, provando que nada neste processo o consome.
+  - **Uma execução da suíte e2e falhou 47 de 52 testes e não foi reproduzida depois** (3 tentativas: 2 na mesma sequência combinada, 1 isolada; todas verdes). O texto do erro se perdeu porque o comando estava filtrado por grep. Descartei estado de schema (banco com 6 tabelas e 3 migrations logo após a suíte unit) e truncamento do `afterAll` pelo `--forceExit` (3 execuções seguidas restauraram corretamente). A explicação mais provável é contenção de CPU: eu rodei `eslint` sobre todo o `src/` concorrentemente com a fase e2e, e 47 falhas em cascata combinam com timeout de boot da aplicação. **Não é uma causa comprovada** — se reaparecer, capturar o erro antes de qualquer outra coisa.
+  - `createTestQueue` isola por nome de fila com UUID e faz `obliterate` no close: filas BullMQ são globais no Redis, então duas suítes na mesma fila veriam os jobs uma da outra.
+  - As constantes de fila e as opções de job ficam em `videos.constants.ts` porque o container `video-worker` de SI-03.7 precisa concordar na mesma string de nome de fila — divergir ali enfileira jobs numa fila que ninguém consome.
 
 ### SI-03.6 — Expor ingest tus com autorização, quota e pré-cadastro
 - **Status:** pending

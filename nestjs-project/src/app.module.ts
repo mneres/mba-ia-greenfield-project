@@ -1,3 +1,4 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigType } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -44,6 +45,18 @@ import { VideosModule } from './videos/videos.module';
         autoLoadEntities: true,
         synchronize: false,
       }),
+    }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [queueConfig.KEY],
+      useFactory: (queue: ConfigType<typeof queueConfig>) => ({
+        connection: { host: queue.host, port: queue.port },
+      }),
+      // Impede que o processo da API instancie qualquer Worker. Sem isto, um
+      // @Processor descoberto no futuro rodaria FFmpeg no event loop da API e
+      // anularia o isolamento de CPU que TD-08 comprou com um container
+      // separado.
+      extraOptions: { manualRegistration: true },
     }),
     AuthModule,
     StorageModule,
