@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { Video, VideoStatus } from './entities/video.entity';
+import { generatePublicId } from './public-id.util';
 
 /**
  * Transições permitidas do ciclo de vida (per `phase-03-videos/TD-05`).
@@ -17,12 +18,70 @@ const ALLOWED_TRANSITIONS: Readonly<Record<VideoStatus, VideoStatus[]>> = {
   [VideoStatus.FAILED]: [],
 } as const;
 
+const PG_UNIQUE_VIOLATION = '23505';
+const PUBLIC_ID_COLUMN = 'public_id';
+const MAX_PUBLIC_ID_ATTEMPTS = 3;
+
+/** Forma da falha do driver `pg` que o TypeORM embrulha em `QueryFailedError`. */
+interface PostgresDriverError {
+  code?: string;
+  detail?: string;
+}
+
+function isPublicIdConflict(err: unknown): boolean {
+  if (!(err instanceof QueryFailedError)) return false;
+
+  // `detail` distingue qual UNIQUE falhou: a mesma tabela pode ganhar outras
+  // constraints em fases seguintes, e retentar um id novo não resolveria nenhuma
+  // delas.
+  const driverError = err.driverError as PostgresDriverError | undefined;
+  return (
+    driverError?.code === PG_UNIQUE_VIOLATION &&
+    typeof driverError.detail === 'string' &&
+    driverError.detail.includes(PUBLIC_ID_COLUMN)
+  );
+}
+
+export interface CreateVideoData {
+  channel_id: string;
+  title: string;
+}
+
 @Injectable()
 export class VideosService {
   constructor(
     @InjectRepository(Video)
     private readonly videoRepository: Repository<Video>,
   ) {}
+
+  /**
+   * Cria o rascunho do vídeo com um `public_id` recém-sorteado.
+   *
+   * Sem SELECT prévio, ao contrário do retry de nickname em `ChannelsService`:
+   * lá a base é derivada do e-mail e colidir é o caso normal, aqui o id é
+   * aleatório sobre ~65 bits e a colisão é o caso patológico. A UNIQUE do banco
+   * é o árbitro — é o que transforma "nunca conflita" de argumento
+   * probabilístico em garantia (per `phase-03-videos/TD-06`).
+   */
+  async create(data: CreateVideoData): Promise<Video> {
+    for (let attempt = 0; attempt < MAX_PUBLIC_ID_ATTEMPTS; attempt++) {
+      try {
+        return await this.videoRepository.save(
+          this.videoRepository.create({
+            public_id: generatePublicId(),
+            channel_id: data.channel_id,
+            title: data.title,
+          }),
+        );
+      } catch (err) {
+        if (!isPublicIdConflict(err)) throw err;
+      }
+    }
+
+    throw new Error(
+      `Could not generate a unique public_id after ${MAX_PUBLIC_ID_ATTEMPTS} attempts`,
+    );
+  }
 
   canTransition(from: VideoStatus, to: VideoStatus): boolean {
     return ALLOWED_TRANSITIONS[from].includes(to);

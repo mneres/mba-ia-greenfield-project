@@ -1,15 +1,12 @@
 import { DataSource, QueryFailedError, Repository } from 'typeorm';
-import { RefreshToken } from '../../auth/entities/refresh-token.entity';
-import { VerificationToken } from '../../auth/entities/verification-token.entity';
 import { Channel } from '../../channels/entities/channel.entity';
 import {
+  ALL_ENTITIES,
   cleanAllTables,
   createTestDataSource,
 } from '../../test/create-test-data-source';
 import { User } from '../../users/entities/user.entity';
 import { Video, VideoStatus } from './video.entity';
-
-const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
 
 describe('Video entity (integration)', () => {
   let dataSource: DataSource;

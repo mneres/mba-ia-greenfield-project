@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 3/11 completed
+**SIs:** 4/11 completed
 
 ### SI-03.1 — Provisionar infraestrutura de storage e fila
 - **Status:** completed
@@ -34,9 +34,17 @@
   - **Jest não encerra sozinho após reportar** (open handles) — a execução anterior consumiu os 600s do timeout apesar de os testes terminarem em 4s. Provável `DataSource` não destruído quando uma suíte falha antes do `afterAll`. Fora do escopo deste SI, mas é um imposto em toda rodada de teste.
 
 ### SI-03.4 — Implementar gerador de identificador público
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 217 unit+integration passing (30 suites) + 52 e2e passing; 1 fix attempt
+- **Observations:**
+  - **A suíte completa estava vermelha ao entrar neste SI — 63 falhas em 10 suítes, regressão do SI-03.3 que só apareceu agora.** A relação inversa `Channel.videos` faz o TypeORM exigir `Video` no mesmo DataSource, e toda suíte com `Channel` numa lista de 4 entidades morria em `DataSource.initialize()` com "Entity metadata for Channel#videos was not found". O SI-03.3 rodou só os seus 4 arquivos de teste, nunca a suíte completa — o passo 2 da Definition of Done foi pulado lá.
+  - A correção não foi acrescentar `Video` em dez cópias da lista: `ALL_ENTITIES` passou a ser exportado de `src/test/create-test-data-source.ts` e as 13 declarações locais viraram import. A duplicação era a causa real — cada entidade nova com relação inversa quebrava todas as suítes de uma vez, e as fases 04–07 acrescentam `Comment`, `Like` e `Subscription`.
+  - `jest.spyOn(crypto, 'randomBytes')` não funciona: o Node define a propriedade como não-configurável e o spy lança `Cannot redefine property`. Em vez de mockar o builtin, extraí `appendUnbiasedChars` — função pura sobre bytes conhecidos. O CSPRNG virou fronteira e a lógica de rejeição ficou testável de forma determinística.
+  - O teste estatístico de viés foi verificado contra a implementação defeituosa: sem rejeição a razão dá 1,24 contra o limite de 1,1 do assert. Não é um teste que passa por vacuidade.
+  - `create` não faz SELECT prévio, ao contrário do retry de nickname em `ChannelsService`: lá a base vem do e-mail e colidir é o caso normal; aqui o id é aleatório sobre ~65 bits e o SELECT seria um round trip desperdiçado em todo create.
+  - `isPublicIdConflict` lê `err.driverError` com uma interface estreita em vez do `as any` que `ChannelsService` usa — o `as any` gera 6 erros de `no-unsafe-*` e não valia replicar. `channels.service.ts` segue com os seus (fora de escopo).
+  - AC #4 ("o `id` interno não aparece em nenhuma resposta de API desta fase") **não é verificável neste SI** — nenhum endpoint existe ainda. Cai em SI-03.6 e SI-03.10.
+  - **`npm run lint` não passa no repositório, e não passava antes desta fase:** 119 erros no HEAD, 113 agora. Nenhum introduzido aqui; os 6 a menos são 5 violações de Prettier dos SI-03.1/03.2/03.3 e um import morto. O grosso está em arquivos de teste da fase 02 (`auth.service.spec.ts` 45, `mail.service.integration-spec.ts` 16, `channels.service.spec.ts` 15, `env.validation.integration-spec.ts` 14). O critério 4 da Definition of Done está descumprido desde antes da fase 03 e precisa de uma task própria.
 
 ### SI-03.5 — Registrar fila de processamento (lado produtor)
 - **Status:** pending

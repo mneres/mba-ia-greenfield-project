@@ -68,9 +68,9 @@ describe('VideosService', () => {
     it('should reject a direct jump from draft to ready', async () => {
       const video = videoWith(VideoStatus.DRAFT);
 
-      await expect(service.transition(video, VideoStatus.READY)).rejects.toThrow(
-        'Invalid video transition: draft -> ready',
-      );
+      await expect(
+        service.transition(video, VideoStatus.READY),
+      ).rejects.toThrow('Invalid video transition: draft -> ready');
       expect(repository.save).not.toHaveBeenCalled();
     });
 

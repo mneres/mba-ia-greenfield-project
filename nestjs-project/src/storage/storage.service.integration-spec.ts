@@ -1,4 +1,7 @@
-import { createTestStorage, type TestStorage } from '../test/create-test-storage';
+import {
+  createTestStorage,
+  type TestStorage,
+} from '../test/create-test-storage';
 import { videoSourceKey, videoThumbnailKey } from './storage.keys';
 
 describe('StorageService (integration)', () => {
@@ -16,7 +19,12 @@ describe('StorageService (integration)', () => {
     await storage.close();
   }, 30000);
 
-  const put = async (bucket: string, key: string, body: Buffer, type?: string) => {
+  const put = async (
+    bucket: string,
+    key: string,
+    body: Buffer,
+    type?: string,
+  ) => {
     await storage.service.putObject(bucket, key, body, type);
     written.push({ bucket, key });
   };
@@ -62,7 +70,12 @@ describe('StorageService (integration)', () => {
 
     it('should allow anonymous reads from the public thumbnails bucket', async () => {
       const key = `${storage.prefix}${videoThumbnailKey('vid-3')}`;
-      await put(storage.service.thumbnailsBucket, key, Buffer.from('jpeg'), 'image/jpeg');
+      await put(
+        storage.service.thumbnailsBucket,
+        key,
+        Buffer.from('jpeg'),
+        'image/jpeg',
+      );
 
       const response = await fetch(
         `${process.env.STORAGE_ENDPOINT}/${storage.service.thumbnailsBucket}/${key}`,

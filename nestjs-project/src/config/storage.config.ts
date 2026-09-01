@@ -7,7 +7,8 @@ export default registerAs('storage', () => ({
   // Endpoint público — usado APENAS ao assinar URLs entregues ao browser. A
   // assinatura SigV4 cobre o header Host, então uma URL assinada contra o
   // endpoint interno é inválida fora da rede do Compose.
-  publicEndpoint: process.env.STORAGE_PUBLIC_ENDPOINT || 'http://localhost:9000',
+  publicEndpoint:
+    process.env.STORAGE_PUBLIC_ENDPOINT || 'http://localhost:9000',
   region: process.env.STORAGE_REGION || 'us-east-1',
   accessKey: process.env.STORAGE_ACCESS_KEY,
   secretKey: process.env.STORAGE_SECRET_KEY,

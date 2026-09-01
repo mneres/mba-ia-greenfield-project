@@ -1,4 +1,26 @@
 import { DataSource, EntitySchema, MigrationInterface } from 'typeorm';
+import { RefreshToken } from '../auth/entities/refresh-token.entity';
+import { VerificationToken } from '../auth/entities/verification-token.entity';
+import { Channel } from '../channels/entities/channel.entity';
+import { User } from '../users/entities/user.entity';
+import { Video } from '../videos/entities/video.entity';
+
+/**
+ * Todas as entidades do schema, em fonte única.
+ *
+ * Uma relação inversa (`Channel.videos`) faz o TypeORM exigir a entidade do
+ * outro lado no mesmo DataSource: uma lista parcial derruba o
+ * `DataSource.initialize()` inteiro com "Entity metadata for X#y was not
+ * found". Enquanto cada suíte mantinha sua própria cópia da lista, toda
+ * entidade nova com relação inversa quebrava todas as suítes de uma vez.
+ */
+export const ALL_ENTITIES = [
+  User,
+  Channel,
+  RefreshToken,
+  VerificationToken,
+  Video,
+];
 
 interface TestDataSourceOptions {
   synchronize?: boolean;
