@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 6/11 completed
+**SIs:** 7/11 completed
 
 ### SI-03.1 — Provisionar infraestrutura de storage e fila
 - **Status:** completed
@@ -74,9 +74,14 @@
   - **AC não coberto:** o cenário de `410 UPLOAD_EXPIRED` não é exercitado — depende de o prazo de `UPLOAD_EXPIRATION_HOURS` (48h) vencer. Fica para SI-03.11, junto do reaper.
 
 ### SI-03.7 — Provisionar container video-worker
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 243 unit+integration (34 suites) + 58 e2e passing; 0 fix attempts
+- **Observations:**
+  - Os três critérios de aceitação foram verificados no container real, não só por teste: `ffmpeg -version` responde `5.1.9` no `video-worker` e falha com "executable file not found in $PATH" no `nestjs-api`; o worker fica `running` com a coluna PORTS vazia; e com o worker parado a API seguiu respondendo (`GET /` em 200 e `POST /auth/login` em 401, que é a resposta de domínio correta e prova que roteamento, validação e banco continuam de pé).
+  - O `WorkerModule` registra o BullMQ **sem** `manualRegistration`, ao contrário do `AppModule`. É a metade que faltava do TD-08: na API a opção impede que um `@Processor` vire Worker; aqui é exatamente o que se quer. Os dois lados juntos é que fazem o isolamento valer.
+  - `autoLoadEntities: true` sem nenhum `forFeature` significa que o worker sobe hoje com zero entidades carregadas. Funciona e é o escopo deste SI; **SI-03.9 precisa registrar `Video`** ao adicionar o processor, ou as queries do job falham em runtime.
+  - Para verificar o AC 3 subi o dev server da API temporariamente. Ao encerrá-lo, descobri que `pkill -f 'nest start'` não basta: o `nest start --watch` gera um filho `node dist/main` que sobrevive ao pai e continua servindo a porta 3000. Precisa matar o filho.
+  - **No mesmo levantamento apareceu um processo `jest` do dia 2026-08-31 ainda vivo dentro do container**, da execução do SI-03.3, além de uma dúzia de zombies. É a manifestação concreta do problema de open handles já anotado: `--forceExit` faz o Jest reportar e sair, mas processos ficam para trás segurando conexões. Limpei os que encontrei; a causa segue aberta.
 
 ### SI-03.8 — Implementar wrapper FFmpeg
 - **Status:** pending

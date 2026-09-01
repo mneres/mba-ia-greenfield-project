@@ -17,6 +17,23 @@ services:
       redis:
         condition: service_healthy
 
+  # Processo separado do da API: uma transcodificação de 10GB nunca disputa CPU
+  # com o event loop que atende as requisições (per phase-03-videos/TD-08).
+  # Sem `ports`: o worker não expõe HTTP, só consome da fila.
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    volumes:
+      - .:/home/node/app
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   db:
     image: postgres:17
     ports:
