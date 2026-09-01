@@ -45,6 +45,14 @@ function isPublicIdConflict(err: unknown): boolean {
 export interface CreateVideoData {
   channel_id: string;
   title: string;
+  /**
+   * PK explícita. O ingest tus escolhe o id antes de a row existir, porque a
+   * chave de storage o carrega embutido (per `phase-03-videos/TD-02`); quando
+   * omitido, o banco gera.
+   */
+  id?: string;
+  /** Id do upload tus, que é também a chave do objeto no bucket privado. */
+  upload_id?: string;
 }
 
 @Injectable()
@@ -68,6 +76,8 @@ export class VideosService {
       try {
         return await this.videoRepository.save(
           this.videoRepository.create({
+            ...(data.id !== undefined && { id: data.id }),
+            ...(data.upload_id !== undefined && { upload_id: data.upload_id }),
             public_id: generatePublicId(),
             channel_id: data.channel_id,
             title: data.title,
@@ -81,6 +91,26 @@ export class VideosService {
     throw new Error(
       `Could not generate a unique public_id after ${MAX_PUBLIC_ID_ATTEMPTS} attempts`,
     );
+  }
+
+  /**
+   * Marca o início da chegada de bytes, sem lançar em concorrência.
+   *
+   * Um UPDATE condicional em vez de `transition`: o evento de progresso do tus
+   * e o hook de conclusão podem disparar quase juntos num upload de uma só
+   * parte, e uma corrida ali viraria "transição inválida" — isto é idempotente
+   * por construção, e a condição no WHERE mantém a máquina de estados do TD-05
+   * como árbitro.
+   */
+  async markUploading(videoId: string): Promise<void> {
+    await this.videoRepository.update(
+      { id: videoId, status: VideoStatus.DRAFT },
+      { status: VideoStatus.UPLOADING },
+    );
+  }
+
+  async findById(id: string): Promise<Video | null> {
+    return this.videoRepository.findOneBy({ id });
   }
 
   canTransition(from: VideoStatus, to: VideoStatus): boolean {

@@ -30,3 +30,22 @@ export const VIDEO_PROCESS_JOB_OPTIONS = {
   // um vídeo parou em `failed`.
   removeOnFail: false,
 } as const;
+
+/**
+ * Caminho onde o servidor tus é montado.
+ *
+ * Precisa casar com a rota do `UploadController`: o tus usa este valor para
+ * montar o header `Location` e para reconhecer o próprio prefixo ao extrair o
+ * id do upload da URL.
+ */
+export const TUS_UPLOAD_PATH = '/videos/upload';
+
+/** Tamanho de parte do multipart S3 (per `phase-03-videos/TD-03`). */
+export const TUS_PART_SIZE_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Teto de partes do multipart. 10.000 é o limite da AWS; a 50MB por parte um
+ * upload de 10GB fica em ~200 partes, dentro também do limite menor de 1.000 que
+ * alguns provedores compatíveis impõem (per `phase-03-videos/TD-03`).
+ */
+export const TUS_MAX_MULTIPART_PARTS = 10000;

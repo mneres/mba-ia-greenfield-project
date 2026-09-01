@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import type { ConfigType } from '@nestjs/config';
 import databaseConfig from '../config/database.config';
 import queueConfig from '../config/queue.config';
+import storageConfig from '../config/storage.config';
 import { ALL_ENTITIES } from '../test/create-test-data-source';
 import { VideoQueueService } from './video-queue.service';
 import { VideosModule } from './videos.module';
@@ -16,7 +17,7 @@ describe('VideosModule', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
-          load: [databaseConfig, queueConfig],
+          load: [databaseConfig, queueConfig, storageConfig],
         }),
         TypeOrmModule.forRootAsync({
           inject: [databaseConfig.KEY],

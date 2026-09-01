@@ -1,4 +1,5 @@
 import {
+  ListObjectsV2Command,
   CreateBucketCommand,
   DeleteObjectCommand,
   GetObjectCommand,
@@ -133,6 +134,16 @@ export class StorageService implements OnModuleInit {
     );
     const bytes = await result.Body!.transformToByteArray();
     return Buffer.from(bytes);
+  }
+
+  /** Chaves sob um prefixo. Usado por testes para provar ausência de escrita. */
+  async listObjectKeys(bucket: string, prefix: string): Promise<string[]> {
+    const result = await this.client.send(
+      new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }),
+    );
+    return (result.Contents ?? [])
+      .map((object) => object.Key)
+      .filter((key): key is string => key !== undefined);
   }
 
   async deleteObject(bucket: string, key: string): Promise<void> {

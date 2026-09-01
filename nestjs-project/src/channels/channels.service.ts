@@ -21,6 +21,19 @@ function isPgUniqueViolationOnColumn(err: unknown, column: string): boolean {
 export class ChannelsService {
   constructor(private readonly dataSource: DataSource) {}
 
+  /**
+   * Resolve o canal de um usuário.
+   *
+   * Vive aqui, e não no módulo de vídeos, porque `Channel` é entidade deste
+   * domínio — o ingest precisa do `channel_id` do dono do token, mas não deve
+   * consultar a tabela de outro módulo.
+   */
+  async findByUserId(userId: string): Promise<Channel | null> {
+    return this.dataSource
+      .getRepository(Channel)
+      .findOneBy({ user_id: userId });
+  }
+
   async createChannel(userId: string, email: string): Promise<Channel> {
     const baseNickname = sanitizeNickname(email.split('@')[0]);
 

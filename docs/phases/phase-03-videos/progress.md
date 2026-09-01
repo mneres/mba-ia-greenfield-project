@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 5/11 completed
+**SIs:** 6/11 completed
 
 ### SI-03.1 — Provisionar infraestrutura de storage e fila
 - **Status:** completed
@@ -59,9 +59,19 @@
   - As constantes de fila e as opções de job ficam em `videos.constants.ts` porque o container `video-worker` de SI-03.7 precisa concordar na mesma string de nome de fila — divergir ali enfileira jobs numa fila que ninguém consome.
 
 ### SI-03.6 — Expor ingest tus com autorização, quota e pré-cadastro
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 241 unit+integration (33 suites) + 58 e2e passing; 4 fix attempts
+- **Observations:**
+  - **`@tus/server@2` e `@tus/s3-store@2` são ESM puro** (`exports` é uma string, sem sequer condição `require`) e não carregam sob o ts-jest. Tentei manter a v2 transformando `node_modules`, mas a árvore puxa `srvx` com `.mjs` e cada dep ESM nova vira mais exceção de config. **Decisão do usuário: fixar a v1** (`@tus/server@1.10.2`, `@tus/s3-store@1.9.1`), que é CJS e cuja API cobre tudo que TD-03/TD-04/TD-16/TD-17 exigem — verificado no `.d.ts` instalado. **Terceira vez nesta fase que o CommonJS vincula uma versão** (nanoid v6 no TD-06, @nestjs/bullmq 12 no SI-03.5); a restrição está ficando cara e merece ser reavaliada como task própria.
+  - **A `library-refs.md` documenta as assinaturas da v2 e elas divergem da v1:** os hooks da v1 recebem e devolvem o `res` (`onUploadCreate(req, res, upload) => { res, metadata }`), não `(req, upload) => { metadata }`. Corrigido no código; a library-refs continua descrevendo a v2 e deveria ser anotada.
+  - **`draft -> processing` não existe na máquina de estados do TD-05** e nada disparava o passo `uploading` — o primeiro PATCH devolvia 500. Resolvido com `VideosService.markUploading`, um UPDATE condicional (`WHERE status = 'draft'`) disparado pelo evento `POST_RECEIVE` do tus, com fallback no `onUploadFinish` para uploads de uma parte só, onde o evento pode não chegar a rodar. É UPDATE condicional e não `transition` de propósito: os dois caminhos podem correr juntos e uma corrida viraria "transição inválida".
+  - **O `ThrottlerGuard` é global, não escopado ao `AuthModule`** — está registrado como `APP_GUARD`, e a nota da Authorization Matrix que afirma o contrário está errada sobre o mecanismo (a conclusão dela, de que a cota é quem limita o abuso, continua válida). A 10 req/min ele cortaria os ~200 PATCHes de um upload de 10GB no meio, então o `UploadController` leva `@SkipThrottle()` — obrigatório, não otimização. **A Authorization Matrix precisa ser corrigida.**
+  - **`test:e2e` nunca serializou as suítes**, apesar de o `nestjs-project/CLAUDE.md` afirmar que estaria "already configured" com `--runInBand`. Com 3 suítes passava por sorte (só a de auth era pesada em banco); a quarta tornou determinística a contaminação — FK violation em `users`/`channels` e 401 por throttler cruzado. Adicionado `maxWorkers: 1` ao `test/jest-e2e.json`, que vale para qualquer forma de invocação. **Isto também explica as 47 falhas e2e não reproduzidas do SI-03.5** — a observação de lá, que atribuía o caso a contenção de CPU, está corrigida por esta.
+  - O `bootstrap.ts` extrai a configuração global compartilhada entre `main.ts` e os testes e2e. Sem isso cada suíte reproduz o pipeline à mão e diverge da produção em silêncio — o que já era o caso: `auth.e2e-spec.ts` monta o app sem `bodyParser: false`. **Ele continua assim (fora de escopo), então ainda não exercita o bootstrap real.**
+  - O id do upload tus **é** a chave de storage (`videos/{videoId}/source{ext}`), com o `videoId` sorteado no `namingFunction` e reusado como PK — é o que mantém a chave determinística mesmo sendo escolhida antes de a row existir (TD-02). Exigiu um `getFileIdFromRequest` próprio, porque o id contém barras e o padrão do tus só lê o último segmento da URL.
+  - O teto de tamanho é aplicado duas vezes: explicitamente no `onUploadCreate` e pela opção `maxSize` do tus. A segunda responde 413 com corpo de texto puro, então `onResponseError` traduz qualquer 413 para o envelope — sem isso o cenário 1.2 do spec recebia `{}`.
+  - `ChannelsService.findByUserId` foi adicionado lá, e não no módulo de vídeos, por Single Responsibility: `Channel` é entidade daquele domínio. Usa `dataSource.getRepository` em vez de um novo parâmetro de construtor, que teria quebrado 8 call sites de teste.
+  - **AC não coberto:** o cenário de `410 UPLOAD_EXPIRED` não é exercitado — depende de o prazo de `UPLOAD_EXPIRATION_HOURS` (48h) vencer. Fica para SI-03.11, junto do reaper.
 
 ### SI-03.7 — Provisionar container video-worker
 - **Status:** pending

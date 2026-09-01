@@ -17,3 +17,14 @@ export const videoThumbnailKey = (videoId: string): string =>
 
 /** Prefixo de todos os objetos de um vídeo no bucket privado. */
 export const videoPrefix = (videoId: string): string => `videos/${videoId}/`;
+
+/**
+ * Extrai o `videoId` de uma chave de source.
+ *
+ * O ingest tus nomeia o upload com a própria chave de storage, então o id do
+ * upload devolvido pelo protocolo carrega o `videoId` embutido — é assim que a
+ * chave continua determinística mesmo com o nome sendo escolhido antes de a row
+ * existir (per `phase-03-videos/TD-02`).
+ */
+export const parseVideoIdFromSourceKey = (key: string): string | undefined =>
+  /^videos\/([^/]+)\/source/.exec(key)?.[1];

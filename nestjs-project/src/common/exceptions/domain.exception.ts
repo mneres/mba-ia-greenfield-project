@@ -48,3 +48,19 @@ export class TokenReuseDetectedException extends DomainException {
     );
   }
 }
+
+export class UploadTooLargeException extends DomainException {
+  constructor(maxBytes: number) {
+    super(
+      'UPLOAD_TOO_LARGE',
+      413,
+      `Declared upload size exceeds the maximum of ${maxBytes} bytes`,
+    );
+  }
+}
+
+export class UploadQuotaExceededException extends DomainException {
+  constructor(reason: string) {
+    super('UPLOAD_QUOTA_EXCEEDED', 409, reason);
+  }
+}
