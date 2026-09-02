@@ -1,3 +1,6 @@
+import { createWriteStream } from 'fs';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import {
   ListObjectsV2Command,
   CreateBucketCommand,
@@ -11,7 +14,6 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
-import { Readable } from 'stream';
 import storageConfig from '../config/storage.config';
 
 /** Política que libera leitura anônima de um bucket inteiro. */
@@ -134,6 +136,26 @@ export class StorageService implements OnModuleInit {
     );
     const bytes = await result.Body!.transformToByteArray();
     return Buffer.from(bytes);
+  }
+
+  /**
+   * Baixa um objeto para um arquivo, em streaming.
+   *
+   * Existe separado de `getObjectBuffer` por causa do tamanho: um source de
+   * vídeo chega a 10GB (TD-03), e materializá-lo em Buffer derrubaria o
+   * processo. O FFmpeg opera sobre caminho de arquivo (TD-09), então o destino
+   * natural é o disco, não a memória.
+   */
+  async downloadToFile(
+    bucket: string,
+    key: string,
+    destinationPath: string,
+  ): Promise<void> {
+    const result = await this.client.send(
+      new GetObjectCommand({ Bucket: bucket, Key: key }),
+    );
+
+    await pipeline(result.Body as Readable, createWriteStream(destinationPath));
   }
 
   /** Chaves sob um prefixo. Usado por testes para provar ausência de escrita. */

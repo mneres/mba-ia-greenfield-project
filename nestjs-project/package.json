@@ -20,7 +20,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:integration": "jest --runInBand --testRegex=\"\\.integration-spec\\.ts$\"",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:worker": "jest --runInBand --forceExit --testPathIgnorePatterns \"/node_modules/\" -- ffmpeg.util.integration-spec",
+    "test:worker": "jest --runInBand --forceExit --testPathIgnorePatterns \"/node_modules/\" -- \"src/worker/.*integration-spec\"",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:run": "npm run typeorm -- migration:run -d src/database/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/database/data-source.ts",
@@ -102,7 +102,7 @@
     ],
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "<rootDir>/worker/ffmpeg.util.integration-spec.ts"
+      "<rootDir>/worker/.*\\.integration-spec\\.ts$"
     ]
   }
 }

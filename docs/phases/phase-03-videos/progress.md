@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 8/11 completed
+**SIs:** 9/11 completed
 
 ### SI-03.1 — Provisionar infraestrutura de storage e fila
 - **Status:** completed
@@ -96,9 +96,17 @@
   - As fixtures são sintéticas, geradas com `lavfi` dentro do worker: `sample.mp4` (2s, 640x360, vídeo+áudio, 36KB) e `sample-audio.m4a` (só áudio, 10KB), esta última exigida pelo AC 2, que o plano não menciona como fixture.
 
 ### SI-03.9 — Implementar job de processamento de vídeo
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 243 unit+integration (API) + 58 e2e + 24 no container video-worker; 0 fix attempts
+- **Observations:**
+  - **`getObjectBuffer` não serve para o source e isso não é detalhe:** ele materializa o objeto inteiro em memória, e TD-03 admite uploads de 10GB — o worker morreria de OOM no primeiro vídeo grande. Adicionado `StorageService.downloadToFile`, que faz pipeline do stream do S3 para disco. O `getObjectBuffer` continua sendo o certo para o thumbnail (~100KB). O plano não menciona essa distinção.
+  - Ausência de stream de vídeo é recusa **permanente**, via `UnrecoverableError` do BullMQ: o arquivo não vira vídeo numa segunda tentativa, e o AC 2 exige exatamente que ela não consuma as 3 tentativas em erro genérico. Esse caminho transiciona para `failed` dentro do `process`; os erros transitórios só transicionam no `@OnWorkerEvent('failed')`, quando as tentativas se esgotam — a distinção é o que impede um vídeo de ser dado como perdido enquanto ainda tem retry pela frente.
+  - `WorkerModule` registra `VideosService` e `TypeOrmModule.forFeature([Video])` diretamente, em vez de importar o `VideosModule`. Importar traria o controller tus e o `UploadService` para um processo sem HTTP. **Resolve a pendência anotada no SI-03.7** sobre `autoLoadEntities` sem nenhum `forFeature`.
+  - A convenção de teste do worker foi generalizada: **todo `*.integration-spec.ts` sob `src/worker/` roda em `video-worker`**, `*.spec.ts` roda na API. Antes o script apontava para um arquivo específico, o que não escalaria a partir deste SI.
+  - O guard de `ready` como terminal faz um job duplicado sair cedo em vez de reprocessar — coberto por um teste que apaga o thumbnail antes da segunda chamada e verifica que ele não é regravado. Sem ele o teste seria vacuoso, já que a chave é determinística e a sobrescrita seria indistinguível.
+  - `ffprobe_metadata` guarda o payload íntegro, não só os três campos tipados. O teste prova isso pelo stream de áudio da fixture, que não tem coluna própria e só existe no jsonb.
+  - **`Entity metadata for Video#channel was not found`**: registrar só `forFeature([Video])` não basta, porque `Video` aponta para `Channel`, que aponta para `User`. Mesma classe de bug do SI-03.3, na direção oposta. Corrigido movendo a lista canônica de `src/test/create-test-data-source.ts` para `src/database/entities.ts` — ela é código de produção agora que o `WorkerModule` também precisa dela; o helper de teste apenas reexporta. **O `autoLoadEntities` que o SI-03.7 deixou no worker era insuficiente por construção, não só por falta de `forFeature`.**
+  - A spec chama `processor.process()` diretamente com um `Job` mínimo, então **o consumo real da fila não é exercitado por teste**. Verifiquei manualmente nos containers: enfileirei um job pelo processo da API e o `video-worker` o consumiu, levando a row a `ready` com `duration=2`, `640x360`, `ffprobe_metadata` preenchido, e o thumbnail respondendo `200 image/jpeg` sem credenciais. Os artefatos da verificação foram removidos do banco e do MinIO.
 
 ### SI-03.10 — Expor endpoints de playback e download
 - **Status:** pending
