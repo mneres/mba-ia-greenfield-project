@@ -22,6 +22,7 @@ import { Video, VideoStatus } from '../videos/entities/video.entity';
 import type { VideoProcessJobData } from '../videos/video-queue.service';
 import { VideosService } from '../videos/videos.service';
 import { probe, findVideoStream } from './ffmpeg.util';
+import { ReaperProcessor } from './reaper.processor';
 import { VideoProcessor } from './video.processor';
 
 /**
@@ -66,6 +67,12 @@ describe('VideoProcessor (integration)', () => {
         VideoProcessor,
         VideosService,
         { provide: getRepositoryToken(Video), useValue: videoRepository },
+        // Esta suíte exercita só o pipeline de vídeo; o recolhimento tem a
+        // própria spec, e instanciar o reaper aqui exigiria fila e S3Store.
+        {
+          provide: ReaperProcessor,
+          useValue: { reap: jest.fn() } as unknown as ReaperProcessor,
+        },
       ],
     }).compile();
 

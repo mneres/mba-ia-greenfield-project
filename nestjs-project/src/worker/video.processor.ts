@@ -11,9 +11,11 @@ import type { VideoProcessJobData } from '../videos/video-queue.service';
 import {
   VIDEO_PROCESSING_QUEUE,
   VIDEO_PROCESS_JOB_OPTIONS,
+  VIDEO_REAP_JOB,
 } from '../videos/videos.constants';
 import { VideosService } from '../videos/videos.service';
 import { extractThumbnail, findVideoStream, probe } from './ffmpeg.util';
+import { ReaperProcessor } from './reaper.processor';
 
 /** Fração da duração usada para o quadro do thumbnail (per `TD-10`). */
 const THUMBNAIL_POSITION_RATIO = 0.1;
@@ -35,11 +37,25 @@ export class VideoProcessor extends WorkerHost {
   constructor(
     private readonly videosService: VideosService,
     private readonly storageService: StorageService,
+    private readonly reaperProcessor: ReaperProcessor,
   ) {
     super();
   }
 
+  /**
+   * Despacha por nome de job.
+   *
+   * O BullMQ entrega por **fila**, não por nome: um segundo `@Processor` sobre
+   * `video-processing` criaria outro Worker competindo pelos mesmos jobs, e
+   * cada um receberia os do outro tipo. Como TD-17 põe o `reap` nesta mesma
+   * fila, o despacho tem que acontecer aqui.
+   */
   async process(job: Job<VideoProcessJobData>): Promise<void> {
+    if (job.name === VIDEO_REAP_JOB) {
+      await this.reaperProcessor.reap();
+      return;
+    }
+
     const { videoId } = job.data;
 
     const video = await this.videosService.findById(videoId);
@@ -128,6 +144,12 @@ export class VideoProcessor extends WorkerHost {
    */
   @OnWorkerEvent('failed')
   async onFailed(job: Job<VideoProcessJobData>, error: Error): Promise<void> {
+    // O job de recolhimento não tem vídeo associado para marcar como falho.
+    if (job.name === VIDEO_REAP_JOB) {
+      this.logger.error(`Reaper run failed: ${error.message}`);
+      return;
+    }
+
     const attemptsAllowed =
       job.opts.attempts ?? VIDEO_PROCESS_JOB_OPTIONS.attempts;
     const isFinalAttempt =

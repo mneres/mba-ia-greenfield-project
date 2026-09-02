@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
-**Status:** in_progress
-**SIs:** 10/11 completed
+**Status:** completed
+**SIs:** 11/11 completed
 
 ### SI-03.1 — Provisionar infraestrutura de storage e fila
 - **Status:** completed
@@ -121,6 +121,13 @@
   - O E2E semeia objetos no MinIO e agora os apaga no `afterEach` — mesma lição do SI-03.6, onde resíduo de execução anterior quebrou uma asserção de "nada foi gravado".
 
 ### SI-03.11 — Implementar reaper de uploads abandonados
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 272 unit+integration (API) + 65 e2e + 35 no container video-worker; 1 fix attempt
+- **Observations:**
+  - **`ReaperProcessor` não é um `@Processor`, ao contrário do que o nome do arquivo que o plano pede sugere.** O `VideoProcessor` já é o `WorkerHost` da fila `video-processing`, e o BullMQ entrega por **fila**, não por nome de job: um segundo `@Processor` sobre a mesma fila criaria outro Worker competindo, e cada um receberia jobs do outro tipo. Como TD-17 põe o `reap` nessa mesma fila, o despacho por `job.name` tem que ficar no `VideoProcessor`. **Isto vale uma anotação no plano** — a leitura literal da action 1 produz código quebrado.
+  - **Confirmei que era esse exato bug, na fila real:** ao inspecionar o Redis encontrei 5 jobs `reap` falhados com `Video undefined no longer exists` — o pipeline de vídeo rodando sobre o job de recolhimento. Eram anteriores ao despacho; reenfileirei um `reap` contra o worker em execução e ele completou sem falha.
+  - A construção do `S3Store` foi extraída para `tus-store.factory.ts`, usada pela API e pelo worker. TD-17 quer duas instâncias, mas se `expirationPeriodInMilliseconds` ou `useTags` divergissem entre elas o reaper deixaria de reconhecer como expirado exatamente o que a API marcou — e a falha seria silenciosa.
+  - O teste de storage começou fraco (só conferia que o retorno era um número ≥ 0, o que passaria com o reaper desligado). Reescrito para semear um multipart incompleto de verdade via `store.create()` + `store.write()`, esperar a janela de expiração vencer e provar que as chaves somem — e que um upload dentro da janela permanece.
+  - AC 4 (um único scheduler após dois boots) foi verificado nos dois níveis: por teste, chamando `registerSchedule()` duas vezes, e no container real, onde `getJobSchedulers()` devolve exatamente 1 depois de vários restarts.
+  - `EXPIRATION_HOURS = 0.001` (3,6s) na spec: sem encurtar a janela, testar expiração exigiria esperar 48h. Dois testes gastam ~4,5s cada esperando de fato o prazo vencer.
+  - Rows já em `ready`, `processing` ou `failed` não são tocadas — só `draft` e `uploading` esperam bytes. Coberto por teste, senão o reaper tentaria uma transição inválida a partir de um estado terminal.

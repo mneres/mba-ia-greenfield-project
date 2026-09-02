@@ -12,6 +12,7 @@ import { StorageModule } from '../storage/storage.module';
 import { Video } from '../videos/entities/video.entity';
 import { VIDEO_PROCESSING_QUEUE } from '../videos/videos.constants';
 import { VideosService } from '../videos/videos.service';
+import { ReaperProcessor } from './reaper.processor';
 import { VideoProcessor } from './video.processor';
 
 /**
@@ -65,6 +66,6 @@ import { VideoProcessor } from './video.processor';
     TypeOrmModule.forFeature([Video]),
     StorageModule,
   ],
-  providers: [VideosService, VideoProcessor],
+  providers: [VideosService, VideoProcessor, ReaperProcessor],
 })
 export class WorkerModule {}

@@ -49,3 +49,12 @@ export const TUS_PART_SIZE_BYTES = 50 * 1024 * 1024;
  * alguns provedores compatíveis impõem (per `phase-03-videos/TD-03`).
  */
 export const TUS_MAX_MULTIPART_PARTS = 10000;
+
+/** Nome do job de recolhimento, na mesma fila do processamento (per `TD-17`). */
+export const VIDEO_REAP_JOB = 'reap';
+
+/** Id do Job Scheduler; `upsertJobScheduler` e idempotente por este id. */
+export const REAPER_SCHEDULER_ID = 'abandoned-upload-reaper';
+
+/** Intervalo do recolhimento: de hora em hora (per `TD-17`). */
+export const REAPER_INTERVAL_MS = 60 * 60 * 1000;

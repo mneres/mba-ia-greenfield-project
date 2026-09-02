@@ -3,7 +3,6 @@ import { extname } from 'path';
 import type http from 'http';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
-import { S3Store } from '@tus/s3-store';
 import { EVENTS, Server, type Upload } from '@tus/server';
 import { ChannelsService } from '../channels/channels.service';
 import {
@@ -16,14 +15,11 @@ import {
   videoSourceKey,
 } from '../storage/storage.keys';
 import type { JwtPayload } from '../auth/auth.types';
+import { createTusS3Store } from './tus-store.factory';
 import { UploadQuotaService } from './upload-quota.service';
 import { VideoQueueService } from './video-queue.service';
 import { VideoStatus } from './entities/video.entity';
-import {
-  TUS_MAX_MULTIPART_PARTS,
-  TUS_PART_SIZE_BYTES,
-  TUS_UPLOAD_PATH,
-} from './videos.constants';
+import { TUS_UPLOAD_PATH } from './videos.constants';
 import { VideosService } from './videos.service';
 
 /** O `JwtAuthGuard` grava o payload na request antes de o tus vê-la. */
@@ -46,28 +42,7 @@ export class UploadService {
   ) {
     this.server = new Server({
       path: TUS_UPLOAD_PATH,
-      datastore: new S3Store({
-        partSize: TUS_PART_SIZE_BYTES,
-        maxMultipartParts: TUS_MAX_MULTIPART_PARTS,
-        // Habilita a extensão de expiração: passado o prazo, a URL do upload
-        // responde 410 Gone, que é o sinal para o cliente reiniciar em vez de
-        // falhar em silêncio (per `phase-03-videos/TD-17`).
-        expirationPeriodInMilliseconds:
-          this.config.uploadExpirationHours * 60 * 60 * 1000,
-        // A extensão de expiração é implementada com object tagging. MinIO
-        // suporta; num backend sem tagging isto desliga a expiração calado.
-        useTags: true,
-        s3ClientConfig: {
-          bucket: this.config.videosBucket,
-          region: this.config.region,
-          endpoint: this.config.endpoint,
-          forcePathStyle: true,
-          credentials: {
-            accessKeyId: this.config.accessKey!,
-            secretAccessKey: this.config.secretKey!,
-          },
-        },
-      }),
+      datastore: createTusS3Store(this.config),
       // Defesa em profundidade: o teto também é checado explicitamente em
       // `onUploadCreate`, que é onde o erro vira o envelope do projeto.
       maxSize: this.config.maxUploadBytes,
