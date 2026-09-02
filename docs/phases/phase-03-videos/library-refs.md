@@ -95,6 +95,10 @@ const cmd = new GetObjectCommand({
 
 Used by: **TD-03** (ingest protocol), **TD-04** (enforcement seam), **TD-16** (quota in hooks, Nest controller mounting), **TD-17** (expiry reaping).
 
+> **Correção (2026-09-02, durante SI-03.6): esta seção foi escrita contra a v2, mas o projeto usa a v1.** `@tus/server@2` e `@tus/s3-store@2` são ESM puro — o campo `exports` é uma string, sem sequer condição `require` — e não carregam sob o transform CommonJS do ts-jest. Manter a v2 exigiria transformar `node_modules`, e a árvore de dependências puxa `srvx` com `.mjs`, de modo que a lista de exceções cresce a cada dep ESM nova. Versões instaladas: **`@tus/server@1.10.2`** e **`@tus/s3-store@1.9.1`**, ambas CJS, com toda a API que TD-03/TD-04/TD-16/TD-17 exigem. É a mesma restrição que TD-06 já havia ratificado ao recusar o `nanoid` v6.
+>
+> **A diferença de assinatura importa:** na v1 os hooks recebem **e devolvem** o `res`. As linhas da tabela abaixo estão na forma da v2.
+
 #### Mounting (TD-16 — inside a Nest controller, guards active)
 
 `server.handle(req, res)` takes Node's `http.IncomingMessage`/`ServerResponse`, so it works from a Nest controller taking `@Req()`/`@Res()`. Requires `NestFactory.create({ bodyParser: false })` with JSON parsing re-applied to non-tus routes.
@@ -113,9 +117,9 @@ app.all('/upload/*', (req, res) => tusServer.handle(req, res));
 | Hook | Signature | Use here |
 |---|---|---|
 | `onIncomingRequest` | `(req, uploadId) => Promise<void>` | Access control. **Per TD-04's Revision, JWT moved to `JwtAuthGuard`** — this hook is no longer the auth point. |
-| `onUploadCreate` | `(req, upload) => Promise<{metadata?}>` | TD-16 quota check + TD-05 draft-row creation. Throw `{status_code, body}` to abort before any byte is stored. |
-| `onUploadFinish` | `(req, res, upload) => Promise<{status_code?, headers?, body?}>` | Enqueue the processing job (TD-11). |
-| `onResponseError` | `(req, err) => Promise<{status_code, body} \| void>` | Map to the `{ statusCode, error, message }` envelope (`phase-02-auth/TD-07`). |
+| `onUploadCreate` | v2: `(req, upload) => Promise<{metadata?}>` — **v1 (em uso): `(req, res, upload) => Promise<{res, metadata?}>`** | TD-16 quota check + TD-05 draft-row creation. Throw `{status_code, body}` to abort before any byte is stored. |
+| `onUploadFinish` | v2: `(req, res, upload) => Promise<{status_code?, headers?, body?}>` — **v1 (em uso): o retorno precisa carregar `res`** | Enqueue the processing job (TD-11). |
+| `onResponseError` | v2: `(req, err) => Promise<{status_code, body} \| void>` — **v1 (em uso): `(req, res, err) => ...`** | Map to the `{ statusCode, error, message }` envelope (`phase-02-auth/TD-07`). O tus não define `Content-Type` ao escrever o corpo: sem `res.setHeader('Content-Type', 'application/json')` o cliente recebe JSON rotulado como texto. |
 
 `maxSize` accepts an async function `(req, uploadId) => number`, so TD-16's per-user ceiling can be dynamic rather than a constant.
 

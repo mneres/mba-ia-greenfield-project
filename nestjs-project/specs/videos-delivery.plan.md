@@ -12,6 +12,13 @@ target_file: nestjs-project/test/videos-delivery.e2e-spec.ts
 
 Os dois endpoints de entrega devolvem URLs presignadas de curta duração; o cliente busca os bytes direto do object storage, que serve HTTP Range nativamente — a API nunca está no caminho dos bytes. O acesso é barrado por **estado do recurso**, não por identidade: anônimos leem vídeos `ready`, e o dono autenticado alcança também os seus vídeos ainda não prontos. Vídeos não-prontos respondem `404` (nunca `403`), de modo que não são distinguíveis de um `publicId` inexistente e portanto não são enumeráveis.
 
+> **Restrição de ambiente (registrada em 2026-09-02, durante SI-03.10).** TD-01 assina as URLs contra `STORAGE_PUBLIC_ENDPOINT` (`localhost:9000`), que é o host do browser e, por construção, **não é alcançável de dentro da rede do Compose** — ali `localhost` é o próprio container. Como SigV4 assina o header `Host`, trocar o host da URL pronta invalida a assinatura, então não há contorno.
+>
+> Isso torna inexecutáveis, como escritos, o passo 2–3 do cenário **1.4** e o passo 3 do **2.1**: ambos exigem *requisitar* a URL retornada. A verificação foi dividida:
+>
+> - o E2E confere os parâmetros assinados que a URL carrega (`X-Amz-Expires`, `X-Amz-Signature`, `response-content-disposition`);
+> - `src/videos/videos.controller.integration-spec.ts` sobe uma segunda instância de `StorageService` assinando contra o endpoint **interno** e aí sim busca os bytes, cobrindo Range (dois `206` consecutivos), `Content-Disposition: attachment` e rejeição de assinatura adulterada.
+
 ## Test Scenarios
 
 ### 1. Playback

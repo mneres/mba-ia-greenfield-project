@@ -236,7 +236,9 @@ Cenários E2E do protocolo tus completo são authored externamente por `/plan-te
 **Technical actions:**
 
 1. Criar `src/worker/ffmpeg.util.ts` — `spawn` dos binários do sistema, com tratamento de exit code e captura de `stderr`; nenhuma dependência npm de wrapper, já que `fluent-ffmpeg` foi descontinuado e arquivado pelo próprio autor (per `phase-03-videos/TD-09`)
-2. Implementar `probe(path)` — executa `ffprobe -v quiet -print_format json -show_format -show_streams` e devolve o JSON parseado, de onde saem `duration`, `width` e `height` (per `phase-03-videos/TD-09` Revision)
+2. Implementar `probe(path)` — executa `ffprobe -v error -print_format json -show_format -show_streams` e devolve o JSON parseado, de onde saem `duration`, `width` e `height` (per `phase-03-videos/TD-09` Revision)
+
+> **Correção (2026-09-02, durante SI-03.8):** esta action dizia `-v quiet`. O `quiet` silencia **também as mensagens de erro** do `ffprobe`, então um arquivo ausente ou corrompido falha com `stderr` vazio — o que torna o AC 4 inatingível e deixa `processing_error` sem diagnóstico algum para o painel da Fase 04 (`TD-11`). `-v error` cala o banner e preserva o erro, mantendo o stdout do `-print_format json` limpo. Verificado nos dois casos antes da troca.
 3. Implementar `extractThumbnail(path, atSeconds)` — `-ss` posicionado antes do `-i` para seek no input, `-frames:v 1 -vf scale=1280:-2 -q:v 3`, saída JPEG (per `phase-03-videos/TD-10`)
 4. Adicionar fixture `src/test/fixtures/sample.mp4` — vídeo curto e pequeno, suficiente para exercitar ambos os caminhos (per `phase-03-videos/TD-14`)
 
@@ -332,7 +334,9 @@ Cenários E2E dos dois endpoints são authored externamente por `/plan-test-spec
 
 **Technical actions:**
 
-1. Criar `src/worker/reaper.processor.ts` — job `reap` na mesma fila, hospedado no `video-worker` (per `phase-03-videos/TD-17`)
+1. Criar `src/worker/reaper.processor.ts` — job `reap` na mesma fila, hospedado no `video-worker`, **como serviço injetável e não como `@Processor`** (per `phase-03-videos/TD-17`)
+
+> **Correção (2026-09-02, durante SI-03.11):** o nome do arquivo sugere um `@Processor`, e implementá-lo assim produz código quebrado. O `VideoProcessor` de SI-03.9 já é o `WorkerHost` da fila `video-processing`, e o BullMQ entrega **por fila, não por nome de job**: um segundo `@Processor` sobre a mesma fila cria um segundo Worker competindo por ela, e cada um recebe jobs do outro tipo. Como TD-17 põe o `reap` nessa mesma fila, o despacho por `job.name` precisa ficar no `VideoProcessor`. Isto foi observado na fila real — 5 jobs `reap` falhados com `Video undefined no longer exists` antes do despacho existir.
 2. Construir no worker um `S3Store` + `Server` tus próprios, **sem montar rota**, apenas para invocar `cleanUpExpiredUploads()` — o `Server` que a API monta como rota de controller não é alcançável a partir deste processo (per `phase-03-videos/TD-17` Revision)
 3. Registrar o agendamento no boot do worker com `queue.upsertJobScheduler('abandoned-upload-reaper', { every: 3_600_000 }, ...)` — API de Job Scheduler da v6; `queue.add(..., { repeat })` é a forma legada da v5 e `QueueScheduler` não existe mais (per `phase-03-videos/TD-17`, `library-refs.md` → `bullmq`)
 4. Na mesma execução, transicionar para `failed` com `processing_error` preenchido toda row cujo upload expirou, preservando a row como evidência da tentativa (per `phase-03-videos/TD-17`, `phase-03-videos/TD-05`)
@@ -482,7 +486,9 @@ Access to the two delivery endpoints is gated on **resource state, not identity*
 Notes:
 
 - Anonymous playback and download are **required** by Fase 05 (`Acesso anônimo à visualização de vídeos`, and the download button on that same anonymous page) — this phase must not gate them on identity (per `phase-03-videos/TD-15`).
-- The upload route is guarded by the ordinary `JwtAuthGuard` because the tus handler is mounted as a Nest controller route (per `phase-03-videos/TD-04` Revision, `phase-03-videos/TD-16`). The rate-limiting guard inherited from `phase-02-auth/TD-08` is scoped to `AuthModule` and does **not** cover this route; upload abuse is bounded by the quota checks in `#### Validation Rules — upload ingest` instead.
+- The upload route is guarded by the ordinary `JwtAuthGuard` because the tus handler is mounted as a Nest controller route (per `phase-03-videos/TD-04` Revision, `phase-03-videos/TD-16`). The rate-limiting guard inherited from `phase-02-auth/TD-08` **is global** — it is registered as `APP_GUARD`, so it does cover this route — and the upload controller therefore carries `@SkipThrottle()`. Upload abuse is bounded by the quota checks in `#### Validation Rules — upload ingest` instead.
+
+  > **Correção (2026-09-02, durante SI-03.6):** este parágrafo afirmava que o guard de rate limiting é "scoped to `AuthModule` and does **not** cover this route". Isso está errado sobre o mecanismo: `{ provide: APP_GUARD, useClass: ThrottlerGuard }` é global independentemente do módulo que o declara, e a 10 requisições por minuto ele cortaria no meio os ~200 `PATCH` de um upload de 10GB. A conclusão do parágrafo — que a cota, e não o rate limit, é quem contém o abuso — continua válida; o que faltava era o `@SkipThrottle()` explícito na rota.
 - Fase 04's `visibility` (`public` / `unlisted`) slots into the same resolver method as a second predicate — it is not part of this matrix (per `phase-03-videos/TD-05`, `phase-03-videos/TD-15`).
 
 ### Error Catalog

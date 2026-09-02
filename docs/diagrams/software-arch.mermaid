@@ -7,10 +7,10 @@ C4Container
     Container_Boundary(c1, "StreamTube") {
         Container(frontend, "Frontend", "Next.js", "Platform interface")
         Container(api, "API", "Nest.js", "Business rules and authentication")
-        Container(worker, "Video Worker", "FFmpeg", "Processes videos in background")
+        Container(worker, "Video Worker", "NestJS standalone + FFmpeg", "Processes videos in background; FFmpeg lives only in this image")
         ContainerDb(db, "Database", "PostgreSQL", "Users, channels, videos, comments, likes")
-        ContainerDb(storage, "Object Storage", "S3 or MinIO", "Video files and thumbnails")
-        ContainerQueue(queue, "Message Queue", "TBD", "Enqueues video processing jobs")
+        ContainerDb(storage, "Object Storage", "S3 or MinIO", "Private videos bucket, public-read thumbnails bucket")
+        ContainerQueue(queue, "Message Queue", "BullMQ + Redis", "Enqueues video processing jobs and the hourly upload reaper")
     }
 
     System_Ext(email, "Email Service", "Account confirmation and password recovery")
