@@ -92,6 +92,16 @@ docker compose exec video-worker npm run test:worker
 
 Once a change touches the FFmpeg wrapper or the worker, `npm test` alone does not satisfy the Definition of Done — this command must pass too.
 
+### Integration tests run against the migrated schema
+
+`createTestDataSource` defaults to `synchronize: false`. Suites read the schema the migrations produced, so **the migrations must have been applied before running them**:
+
+```bash
+docker compose exec nestjs-api npm run migration:run
+```
+
+A missing migration now surfaces as a plain `relation "..." does not exist`. The previous default (`synchronize: true`) hid that by synthesising a schema from the entities at connect time — which also let the dev database drift into having tables with an empty `migrations` table, a state whose recovery destroys data. See `.claude/rules/typeorm-migrations.md`.
+
 ### Do not add `--forceExit`
 
 All three suites exit on their own. If a run hangs, that is a signal worth chasing, not something to paper over: `--forceExit` also hides genuinely leaked handles, and it truncates any `afterAll` still in flight — including the one in `migrations.integration-spec.ts` that restores the schema.

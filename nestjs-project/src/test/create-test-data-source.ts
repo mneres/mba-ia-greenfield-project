@@ -10,11 +10,26 @@ interface TestDataSourceOptions {
   migrations?: (new () => MigrationInterface)[];
 }
 
+/**
+ * `synchronize` e `false` por padrao — as suites rodam contra o schema
+ * produzido pelas migrations, nao contra um schema derivado das entidades.
+ *
+ * O default anterior era `true`, e foi a causa raiz de um estrago real: cada
+ * spec de entidade recriava tabelas por fora do runner de migration, o banco
+ * de dev acabou com as tabelas existindo e a tabela `migrations` vazia, e
+ * recuperar isso custou 21 linhas de dados. Alem disso, `.claude/rules/
+ * typeorm-migrations.md` proibe `synchronize: true` em qualquer ambiente.
+ *
+ * O efeito colateral e desejavel: como os testes leem o schema migrado, uma
+ * migration faltando falha de imediato e de forma legivel, em vez de ficar
+ * mascarada por um schema sintetizado na hora.
+ */
+
 export function createTestDataSource(
   entities: (Function | string | EntitySchema<any>)[],
   options: TestDataSourceOptions = {},
 ): DataSource {
-  const { synchronize = true, migrations } = options;
+  const { synchronize = false, migrations } = options;
   return new DataSource({
     type: 'postgres',
     host: process.env.DB_HOST ?? 'db',
