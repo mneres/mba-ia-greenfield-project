@@ -82,6 +82,16 @@ docker compose exec db pg_isready -U streamtube
 curl http://localhost:3000
 ```
 
+### Tests that require the video-worker container
+
+`src/worker/ffmpeg.util.integration-spec.ts` invokes the real `ffprobe` and `ffmpeg` binaries, which exist **only in the `video-worker` image** — the API image deliberately does not have them (`phase-03-videos/TD-08`). The spec is excluded from the default suite via `testPathIgnorePatterns` and has its own command, run in the other container:
+
+```bash
+docker compose exec video-worker npm run test:worker
+```
+
+Once a change touches the FFmpeg wrapper or the worker, `npm test` alone does not satisfy the Definition of Done — this command must pass too.
+
 ### Test execution
 
 Integration and e2e suites share a single test database. They **must** be run with `--runInBand`:

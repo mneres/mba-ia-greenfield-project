@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 7/11 completed
+**SIs:** 8/11 completed
 
 ### SI-03.1 — Provisionar infraestrutura de storage e fila
 - **Status:** completed
@@ -84,9 +84,16 @@
   - **No mesmo levantamento apareceu um processo `jest` do dia 2026-08-31 ainda vivo dentro do container**, da execução do SI-03.3, além de uma dúzia de zombies. É a manifestação concreta do problema de open handles já anotado: `--forceExit` faz o Jest reportar e sair, mas processos ficam para trás segurando conexões. Limpei os que encontrei; a causa segue aberta.
 
 ### SI-03.8 — Implementar wrapper FFmpeg
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 243 unit+integration (34 suites, API) + 58 e2e + 10 no container video-worker; 1 fix attempt
+- **Observations:**
+  - **O teste pegou um bug real no meu wrapper:** `ffprobe -v quiet`, que é o que a technical action 2 prescreve, silencia **também as mensagens de erro** — um arquivo ausente falhava com `stderr` vazio. Isso tornaria o AC 4 inatingível e, pior, deixaria `processing_error` sem diagnóstico nenhum para o painel da Fase 04 (TD-11). Trocado por `-v error`, que cala o banner mas preserva o erro e mantém o stdout do `-print_format json` limpo — verificado nos dois casos antes de mudar. **A technical action 2 do plano deveria dizer `-v error`.**
+  - **A spec de FFmpeg não roda no container da API e isso é permanente, não contornável:** os binários só existem na imagem do worker, por decisão do TD-08 cujo isolamento eu verifiquei no SI-03.7. Excluída da suíte padrão via `testPathIgnorePatterns` e movida para `npm run test:worker`, executado em `video-worker`. **A Definition of Done da fase passa a exigir três comandos, não dois** — documentei em `nestjs-project/CLAUDE.md`, que listava só `npm test` e `npm run test:e2e`.
+  - Confirmei os dois lados do isolamento: a spec não aparece no `--listTests` da API, e forçada lá falha com `spawn ffprobe ENOENT` — o que de quebra exercita o caminho de binário ausente do wrapper.
+  - O filtro posicional do jest só é tratado como padrão de path depois do separador `--`. Sem ele o script rodava a suíte inteira em silêncio, dando a impressão de que o teste passava quando na verdade nem era selecionado. Custou duas tentativas até eu olhar a lista de suítes em vez do total.
+  - `run()` é exportado porque o caminho de binário ausente é distinto do de exit code não-zero — vem por `child.on('error')`, não `'close'`, com `exitCode` nulo — e só é alcançável com um nome que não existe.
+  - `-ss` antes do `-i` não é estilo: ali o seek acontece no input e salta para o keyframe mais próximo; depois do `-i` o ffmpeg decodifica desde o começo até o instante pedido, o que num arquivo de 10GB é a diferença entre milissegundos e minutos.
+  - As fixtures são sintéticas, geradas com `lavfi` dentro do worker: `sample.mp4` (2s, 640x360, vídeo+áudio, 36KB) e `sample-audio.m4a` (só áudio, 10KB), esta última exigida pelo AC 2, que o plano não menciona como fixture.
 
 ### SI-03.9 — Implementar job de processamento de vídeo
 - **Status:** pending
