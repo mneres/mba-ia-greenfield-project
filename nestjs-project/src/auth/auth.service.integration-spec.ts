@@ -26,6 +26,7 @@ import {
   createTestDataSource,
 } from '../test/create-test-data-source';
 import { clearMailpitMessages } from '../test/mailpit';
+import { MailService } from '../mail/mail.service';
 import { AuthService } from './auth.service';
 import { RefreshToken } from './entities/refresh-token.entity';
 import {
@@ -62,14 +63,22 @@ async function createAuthTestModule(): Promise<TestingModule> {
   }).compile();
 }
 
-function captureConfirmationToken(authService: AuthService): Promise<string> {
+/**
+ * Instância do MailService do módulo de teste atual, reatribuída por cada
+ * `beforeAll`. Os helpers abaixo vivem fora dos `describe`, então precisam dela
+ * neste escopo.
+ */
+let mailService: MailService;
+
+function captureConfirmationToken(mailService: MailService): Promise<string> {
   return new Promise((resolve) => {
-    const mailServiceInstance = (authService as any).mailService;
+    const mailServiceInstance = mailService;
     jest
       .spyOn(mailServiceInstance, 'sendConfirmationEmail')
-      .mockImplementationOnce(async (_e: string, _n: string, t: string) =>
-        resolve(t),
-      );
+      .mockImplementationOnce((_e: string, _n: string, t: string) => {
+        resolve(t);
+        return Promise.resolve();
+      });
   });
 }
 
@@ -78,7 +87,7 @@ async function registerConfirmAndLogin(
   email: string,
   password: string,
 ): Promise<{ userId: string; refreshToken: string }> {
-  const capturePromise = captureConfirmationToken(authService);
+  const capturePromise = captureConfirmationToken(mailService);
   const { id: userId } = await authService.register({ email, password });
   const confirmToken = await capturePromise;
   await authService.confirm(confirmToken);
@@ -98,6 +107,7 @@ describe('AuthService — register (integration)', () => {
   beforeAll(async () => {
     const module = await createAuthTestModule();
     authService = module.get(AuthService);
+    mailService = module.get(MailService);
     dataSource = module.get(DataSource);
     verificationTokenRepository = dataSource.getRepository(VerificationToken);
     userRepository = dataSource.getRepository(User);
@@ -161,7 +171,7 @@ describe('AuthService — register (integration)', () => {
   });
 
   it('confirmation token hash matches sha256 of raw token delivered by mail service', async () => {
-    const capturePromise = captureConfirmationToken(authService);
+    const capturePromise = captureConfirmationToken(mailService);
     const result = await authService.register({
       email: 'verify@example.com',
       password: 'password123',
@@ -189,6 +199,7 @@ describe('AuthService — confirm (integration)', () => {
   beforeAll(async () => {
     const module = await createAuthTestModule();
     authService = module.get(AuthService);
+    mailService = module.get(MailService);
     dataSource = module.get(DataSource);
     verificationTokenRepository = dataSource.getRepository(VerificationToken);
     userRepository = dataSource.getRepository(User);
@@ -204,7 +215,7 @@ describe('AuthService — confirm (integration)', () => {
   });
 
   it('sets is_confirmed = true and used_at on valid token', async () => {
-    const capturePromise = captureConfirmationToken(authService);
+    const capturePromise = captureConfirmationToken(mailService);
     const { id: userId } = await authService.register({
       email: 'confirm@example.com',
       password: 'password123',
@@ -229,8 +240,8 @@ describe('AuthService — confirm (integration)', () => {
   });
 
   it('throws TokenExpiredException for an expired token', async () => {
-    const capturePromise = captureConfirmationToken(authService);
-    const { id: userId } = await authService.register({
+    const capturePromise = captureConfirmationToken(mailService);
+    await authService.register({
       email: 'expired@example.com',
       password: 'password123',
     });
@@ -259,6 +270,7 @@ describe('AuthService — resendConfirmation (integration)', () => {
   beforeAll(async () => {
     const module = await createAuthTestModule();
     authService = module.get(AuthService);
+    mailService = module.get(MailService);
     dataSource = module.get(DataSource);
     verificationTokenRepository = dataSource.getRepository(VerificationToken);
   });
@@ -312,6 +324,7 @@ describe('AuthService — login (integration)', () => {
   beforeAll(async () => {
     const module = await createAuthTestModule();
     authService = module.get(AuthService);
+    mailService = module.get(MailService);
     jwtService = module.get(JwtService);
     dataSource = module.get(DataSource);
     refreshTokenRepository = dataSource.getRepository(RefreshToken);
@@ -330,7 +343,7 @@ describe('AuthService — login (integration)', () => {
     email: string,
     password: string,
   ): Promise<string> {
-    const capturePromise = captureConfirmationToken(authService);
+    const capturePromise = captureConfirmationToken(mailService);
     const { id } = await authService.register({ email, password });
     const capturedToken = await capturePromise;
     await authService.confirm(capturedToken);
@@ -391,6 +404,7 @@ describe('AuthService — refresh (integration)', () => {
   beforeAll(async () => {
     const module = await createAuthTestModule();
     authService = module.get(AuthService);
+    mailService = module.get(MailService);
     jwtService = module.get(JwtService);
     dataSource = module.get(DataSource);
     refreshTokenRepository = dataSource.getRepository(RefreshToken);
@@ -508,6 +522,7 @@ describe('AuthService — logout (integration)', () => {
   beforeAll(async () => {
     const module = await createAuthTestModule();
     authService = module.get(AuthService);
+    mailService = module.get(MailService);
     dataSource = module.get(DataSource);
     refreshTokenRepository = dataSource.getRepository(RefreshToken);
   });
@@ -559,14 +574,15 @@ describe('AuthService — logout (integration)', () => {
   });
 });
 
-function capturePasswordResetToken(authService: AuthService): Promise<string> {
+function capturePasswordResetToken(mailService: MailService): Promise<string> {
   return new Promise((resolve) => {
-    const mailServiceInstance = (authService as any).mailService;
+    const mailServiceInstance = mailService;
     jest
       .spyOn(mailServiceInstance, 'sendPasswordResetEmail')
-      .mockImplementationOnce(async (_e: string, _n: string, t: string) =>
-        resolve(t),
-      );
+      .mockImplementationOnce((_e: string, _n: string, t: string) => {
+        resolve(t);
+        return Promise.resolve();
+      });
   });
 }
 
@@ -578,6 +594,7 @@ describe('AuthService — forgotPassword (integration)', () => {
   beforeAll(async () => {
     const module = await createAuthTestModule();
     authService = module.get(AuthService);
+    mailService = module.get(MailService);
     dataSource = module.get(DataSource);
     verificationTokenRepository = dataSource.getRepository(VerificationToken);
   });
@@ -592,7 +609,7 @@ describe('AuthService — forgotPassword (integration)', () => {
   });
 
   it('persists a password reset token and sends an email containing the raw token', async () => {
-    const capturePromise = capturePasswordResetToken(authService);
+    const capturePromise = capturePasswordResetToken(mailService);
     const { id: userId } = await authService.register({
       email: 'forgot@example.com',
       password: 'password123',
@@ -615,7 +632,7 @@ describe('AuthService — forgotPassword (integration)', () => {
   });
 
   it('invalidates previously issued unused reset tokens', async () => {
-    const capturePromise1 = capturePasswordResetToken(authService);
+    const capturePromise1 = capturePasswordResetToken(mailService);
     const { id: userId } = await authService.register({
       email: 'reissue@example.com',
       password: 'password123',
@@ -627,7 +644,7 @@ describe('AuthService — forgotPassword (integration)', () => {
       .update(firstRawToken)
       .digest('hex');
 
-    const capturePromise2 = capturePasswordResetToken(authService);
+    const capturePromise2 = capturePasswordResetToken(mailService);
     await authService.forgotPassword('reissue@example.com');
     await capturePromise2;
 
@@ -661,6 +678,7 @@ describe('AuthService — resetPassword (integration)', () => {
   beforeAll(async () => {
     const module = await createAuthTestModule();
     authService = module.get(AuthService);
+    mailService = module.get(MailService);
     dataSource = module.get(DataSource);
     verificationTokenRepository = dataSource.getRepository(VerificationToken);
     userRepository = dataSource.getRepository(User);
@@ -685,7 +703,7 @@ describe('AuthService — resetPassword (integration)', () => {
       email,
       password,
     );
-    const capturePromise = capturePasswordResetToken(authService);
+    const capturePromise = capturePasswordResetToken(mailService);
     await authService.forgotPassword(email);
     const resetToken = await capturePromise;
     return { userId, resetToken };

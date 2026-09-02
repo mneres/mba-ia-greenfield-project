@@ -44,7 +44,7 @@
   - `create` não faz SELECT prévio, ao contrário do retry de nickname em `ChannelsService`: lá a base vem do e-mail e colidir é o caso normal; aqui o id é aleatório sobre ~65 bits e o SELECT seria um round trip desperdiçado em todo create.
   - `isPublicIdConflict` lê `err.driverError` com uma interface estreita em vez do `as any` que `ChannelsService` usa — o `as any` gera 6 erros de `no-unsafe-*` e não valia replicar. `channels.service.ts` segue com os seus (fora de escopo).
   - AC #4 ("o `id` interno não aparece em nenhuma resposta de API desta fase") **não é verificável neste SI** — nenhum endpoint existe ainda. Cai em SI-03.6 e SI-03.10.
-  - **`npm run lint` não passa no repositório, e não passava antes desta fase:** 119 erros no HEAD, 113 agora. Nenhum introduzido aqui; os 6 a menos são 5 violações de Prettier dos SI-03.1/03.2/03.3 e um import morto. O grosso está em arquivos de teste da fase 02 (`auth.service.spec.ts` 45, `mail.service.integration-spec.ts` 16, `channels.service.spec.ts` 15, `env.validation.integration-spec.ts` 14). O critério 4 da Definition of Done está descumprido desde antes da fase 03 e precisa de uma task própria.
+  - ~~**`npm run lint` não passa no repositório, e não passava antes desta fase.**~~ **Corrigido em 2026-09-02:** 161 erros → 0, e os 40 warnings caíram para 1. O critério 4 da Definition of Done é atendido pela primeira vez.
 
 ### SI-03.5 — Registrar fila de processamento (lado produtor)
 - **Status:** completed

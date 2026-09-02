@@ -1,4 +1,5 @@
-import { DataSource, EntitySchema, MigrationInterface } from 'typeorm';
+import { DataSource, MigrationInterface } from 'typeorm';
+import type { MixedList, EntitySchema } from 'typeorm';
 import { ALL_ENTITIES } from '../database/entities';
 
 // Reexportado para não quebrar os specs que já importam daqui; a lista
@@ -26,7 +27,7 @@ interface TestDataSourceOptions {
  */
 
 export function createTestDataSource(
-  entities: (Function | string | EntitySchema<any>)[],
+  entities: MixedList<string | EntitySchema | (new () => object)>,
   options: TestDataSourceOptions = {},
 ): DataSource {
   const { synchronize = false, migrations } = options;

@@ -16,13 +16,22 @@ const omit = (key: string) => {
   return rest;
 };
 
-const validateExactly = (env: Record<string, string>) =>
+/**
+ * Joi tipa `value` como `any`; declarar a forma que as asserções consomem
+ * impede que esse `any` se espalhe por todo o arquivo.
+ */
+interface ValidationOutcome {
+  value: Record<string, string | undefined>;
+  error?: { message: string; details: { message: string }[] };
+}
+
+const validateExactly = (env: Record<string, string>): ValidationOutcome =>
   envValidationSchema.validate(env, {
     allowUnknown: true,
     abortEarly: false,
-  });
+  }) as ValidationOutcome;
 
-const validate = (env: Record<string, string>) =>
+const validate = (env: Record<string, string>): ValidationOutcome =>
   envValidationSchema.validate(
     { ...requiredEnv, ...env },
     { allowUnknown: true, abortEarly: false },

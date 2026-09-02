@@ -7,13 +7,23 @@ const PG_UNIQUE_VIOLATION = '23505';
 const NICKNAME_COLUMN = 'nickname';
 const MAX_RETRIES = 5;
 
+/**
+ * O TypeORM copia as propriedades do erro do driver `pg` para cima do próprio
+ * `QueryFailedError`, então `code` e `detail` estão acessíveis aqui — mas não
+ * fazem parte do tipo declarado.
+ */
+type PgQueryFailedError = QueryFailedError & {
+  code?: string;
+  detail?: string;
+};
+
 function isPgUniqueViolationOnColumn(err: unknown, column: string): boolean {
   if (!(err instanceof QueryFailedError)) return false;
-  const e = err as any;
+  const pgError = err as PgQueryFailedError;
   return (
-    e.code === PG_UNIQUE_VIOLATION &&
-    typeof e.detail === 'string' &&
-    e.detail.includes(column)
+    pgError.code === PG_UNIQUE_VIOLATION &&
+    typeof pgError.detail === 'string' &&
+    pgError.detail.includes(column)
   );
 }
 
