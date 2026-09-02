@@ -2,8 +2,10 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ChannelsModule } from '../channels/channels.module';
+import { StorageModule } from '../storage/storage.module';
 import { Video } from './entities/video.entity';
 import { UploadController } from './upload.controller';
+import { VideosController } from './videos.controller';
 import { UploadQuotaService } from './upload-quota.service';
 import { UploadService } from './upload.service';
 import { VideoQueueService } from './video-queue.service';
@@ -17,8 +19,9 @@ import { VideosService } from './videos.service';
     // que é exatamente o que TD-08 evita. Aqui a fila só produz.
     BullModule.registerQueue({ name: VIDEO_PROCESSING_QUEUE }),
     ChannelsModule,
+    StorageModule,
   ],
-  controllers: [UploadController],
+  controllers: [UploadController, VideosController],
   providers: [
     VideosService,
     VideoQueueService,

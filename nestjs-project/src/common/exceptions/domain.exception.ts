@@ -64,3 +64,12 @@ export class UploadQuotaExceededException extends DomainException {
     super('UPLOAD_QUOTA_EXCEEDED', 409, reason);
   }
 }
+
+export class VideoNotFoundException extends DomainException {
+  constructor() {
+    // Mesma resposta para "não existe" e para "existe mas não está pronto e
+    // você não é o dono": distinguir os dois tornaria vídeos não-publicados
+    // enumeráveis (per `phase-03-videos/TD-15`).
+    super('VIDEO_NOT_FOUND', 404, 'Video not found');
+  }
+}

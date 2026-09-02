@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 9/11 completed
+**SIs:** 10/11 completed
 
 ### SI-03.1 — Provisionar infraestrutura de storage e fila
 - **Status:** completed
@@ -109,9 +109,16 @@
   - A spec chama `processor.process()` diretamente com um `Job` mínimo, então **o consumo real da fila não é exercitado por teste**. Verifiquei manualmente nos containers: enfileirei um job pelo processo da API e o `video-worker` o consumiu, levando a row a `ready` com `duration=2`, `640x360`, `ffprobe_metadata` preenchido, e o thumbnail respondendo `200 image/jpeg` sem credenciais. Os artefatos da verificação foram removidos do banco e do MinIO.
 
 ### SI-03.10 — Expor endpoints de playback e download
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 272 unit+integration (35 suites) + 65 e2e + 24 no container video-worker; 1 fix attempt
+- **Observations:**
+  - **A URL presignada é, por construção, inalcançável de dentro da rede do Compose.** TD-01 assina contra `STORAGE_PUBLIC_ENDPOINT` (`localhost:9000`), que é o host do browser; de dentro de um container `localhost` é o próprio container. E como SigV4 assina o header `Host`, trocar o host da URL pronta invalida a assinatura — não há contorno. Isso **bloqueia literalmente** dois passos dos specs E2E: o cenário 1.4 ("requisitar a `url` com header Range") e o passo 3 do 2.1 ("requisitar a `url` retornada"). Resolvido dividindo a verificação: o E2E confere os parâmetros assinados que a URL carrega (`X-Amz-Expires`, `X-Amz-Signature`, `response-content-disposition`), e `videos.controller.integration-spec.ts` sobe uma segunda instância de `StorageService` assinando contra o endpoint interno para exercitar Range e `Content-Disposition` buscando os bytes de verdade. **Os specs deveriam registrar essa restrição** — como estão escritos, os passos não são executáveis.
+  - O `JwtAuthGuard` foi estendido em modo estritamente aditivo: uma rota `@Public()` sem `@OptionalAuth()` continua sem olhar o header, e há um teste que prova exatamente isso. Sem essa garantia, mexer no guard global arriscaria todas as rotas públicas da fase 02.
+  - Token inválido numa rota com `@OptionalAuth()` degrada para anônimo em vez de rejeitar — coberto por três casos (token corrompido, token assinado com outro segredo, header `Basic`). O contrário transformaria um token expirado em 401 numa rota que deveria ser pública.
+  - `VIDEO_NOT_FOUND` é lançado tanto para `publicId` inexistente quanto para vídeo não-pronto de terceiro, e um teste compara as duas exceções campo a campo. Sem essa igualdade, comparar respostas revelaria quais vídeos existem.
+  - `VideosModule` passou a importar `StorageModule`, que antes não era necessário: o `UploadService` constrói o próprio `S3Store` a partir da config, sem usar o `StorageService`.
+  - A sanitização do filename usa allowlist Unicode (`\p{L}\p{N} ._-`), não blocklist: o valor atravessa query string assinada **e** header HTTP, e uma blocklist deixaria passar o próximo caractere que quebrasse um dos dois.
+  - O E2E semeia objetos no MinIO e agora os apaga no `afterEach` — mesma lição do SI-03.6, onde resíduo de execução anterior quebrou uma asserção de "nada foi gravado".
 
 ### SI-03.11 — Implementar reaper de uploads abandonados
 - **Status:** pending

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
+import { VideoNotFoundException } from '../common/exceptions/domain.exception';
 import { Video, VideoStatus } from './entities/video.entity';
 import { generatePublicId } from './public-id.util';
 
@@ -107,6 +108,32 @@ export class VideosService {
       { id: videoId, status: VideoStatus.DRAFT },
       { status: VideoStatus.UPLOADING },
     );
+  }
+
+  /**
+   * Resolve um vídeo para entrega, barrando por **estado do recurso**, não por
+   * identidade (per `phase-03-videos/TD-15`).
+   *
+   * Anônimos e autenticados alcançam qualquer vídeo `ready`; o dono alcança
+   * também os seus ainda não prontos. Todo o resto lança `VIDEO_NOT_FOUND` —
+   * nunca `403`, que confirmaria a existência do recurso.
+   *
+   * A Fase 04 encaixa `visibility` aqui como um segundo predicado, no mesmo
+   * método.
+   */
+  async resolveForDelivery(publicId: string, userId?: string): Promise<Video> {
+    const video = await this.videoRepository.findOne({
+      where: { public_id: publicId },
+      relations: { channel: true },
+    });
+
+    if (!video) throw new VideoNotFoundException();
+    if (video.status === VideoStatus.READY) return video;
+
+    const isOwner = userId !== undefined && video.channel?.user_id === userId;
+    if (!isOwner) throw new VideoNotFoundException();
+
+    return video;
   }
 
   async findById(id: string): Promise<Video | null> {
