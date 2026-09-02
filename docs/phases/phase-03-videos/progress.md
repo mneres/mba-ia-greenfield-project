@@ -31,7 +31,7 @@
   - `duration` (numeric) e `size_bytes` (bigint) voltam como string no driver pg; ambos passam por transformer para chegar como `number`. Sem isso a conversão vazaria para todo consumidor em SI-03.9 e SI-03.10.
   - Transição inválida lança `Error` comum, não `DomainException`. `DomainException` é abstrata e nenhum endpoint desta fase deixa o cliente pedir transição arbitrária — logo é erro de programação e `INVALID_VIDEO_TRANSITION` não pertence ao Error Catalog.
   - Dois arquivos fora dos nomeados pelo SI: `Channel` ganhou o lado inverso `videos` (o Data Model especifica o one-to-many e o callback do `@ManyToOne` exige) e `cleanAllTables` passou a limpar `videos` antes de `channels` (ordem da FK). Ambos exigidos pelo contrato.
-  - **Jest não encerra sozinho após reportar** (open handles) — a execução anterior consumiu os 600s do timeout apesar de os testes terminarem em 4s. Provável `DataSource` não destruído quando uma suíte falha antes do `afterAll`. Fora do escopo deste SI, mas é um imposto em toda rodada de teste.
+  - ~~**Jest não encerra sozinho após reportar** (open handles) — a execução anterior consumiu os 600s do timeout apesar de os testes terminarem em 4s.~~ **Diagnóstico errado, corrigido em 2026-09-02:** o travamento era o próprio deadlock do `DROP TABLE ... CASCADE` descrito acima — uma query travada no Postgres bloqueia o processo indefinidamente. As três suítes encerram sozinhas em 32s, 21s e 18s sem `--forceExit`. A flag foi removida.
 
 ### SI-03.4 — Implementar gerador de identificador público
 - **Status:** completed
@@ -81,7 +81,7 @@
   - O `WorkerModule` registra o BullMQ **sem** `manualRegistration`, ao contrário do `AppModule`. É a metade que faltava do TD-08: na API a opção impede que um `@Processor` vire Worker; aqui é exatamente o que se quer. Os dois lados juntos é que fazem o isolamento valer.
   - `autoLoadEntities: true` sem nenhum `forFeature` significa que o worker sobe hoje com zero entidades carregadas. Funciona e é o escopo deste SI; **SI-03.9 precisa registrar `Video`** ao adicionar o processor, ou as queries do job falham em runtime.
   - Para verificar o AC 3 subi o dev server da API temporariamente. Ao encerrá-lo, descobri que `pkill -f 'nest start'` não basta: o `nest start --watch` gera um filho `node dist/main` que sobrevive ao pai e continua servindo a porta 3000. Precisa matar o filho.
-  - **No mesmo levantamento apareceu um processo `jest` do dia 2026-08-31 ainda vivo dentro do container**, da execução do SI-03.3, além de uma dúzia de zombies. É a manifestação concreta do problema de open handles já anotado: `--forceExit` faz o Jest reportar e sair, mas processos ficam para trás segurando conexões. Limpei os que encontrei; a causa segue aberta.
+  - **No mesmo levantamento apareceu um processo `jest` do dia 2026-08-31 ainda vivo dentro do container**, da execução do SI-03.3, além de uma dúzia de zombies. **Correção de 2026-09-02:** eu atribuí isso a open handles, mas era o cadáver da execução que deadlockou no `DROP TABLE ... CASCADE` — uma query travada no Postgres segura o processo para sempre. Não há problema de open handles; as suítes encerram sozinhas.
 
 ### SI-03.8 — Implementar wrapper FFmpeg
 - **Status:** completed

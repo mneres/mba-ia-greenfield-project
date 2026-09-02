@@ -92,16 +92,23 @@ docker compose exec video-worker npm run test:worker
 
 Once a change touches the FFmpeg wrapper or the worker, `npm test` alone does not satisfy the Definition of Done — this command must pass too.
 
+### Do not add `--forceExit`
+
+All three suites exit on their own. If a run hangs, that is a signal worth chasing, not something to paper over: `--forceExit` also hides genuinely leaked handles, and it truncates any `afterAll` still in flight — including the one in `migrations.integration-spec.ts` that restores the schema.
+
+A hang almost always means a query is stuck. The known instance was a deadlock from concurrent `DROP TABLE ... CASCADE` on FK-linked tables; the symptom was a Jest process surviving for days. Diagnose with `--detectOpenHandles` before reaching for a flag.
+
 ### Test execution
 
-Integration and e2e suites share a single test database. They **must** be run with `--runInBand`:
+Integration and e2e suites share a single test database, so they must run serially. **This is now enforced by config** (`maxWorkers: 1` in the `jest` block of `package.json` and in `test/jest-e2e.json`) rather than by remembering a flag:
 
 ```bash
-docker compose exec nestjs-api npm test -- --runInBand
-docker compose exec nestjs-api npm run test:e2e   # already configured
+docker compose exec nestjs-api npm test
+docker compose exec nestjs-api npm run test:e2e
+docker compose exec video-worker npm run test:worker
 ```
 
-Parallel execution causes FK violations, deadlocks, and cross-suite contamination because suites truncate or seed shared tables concurrently.
+Parallel execution causes FK violations, deadlocks, and cross-suite contamination because suites truncate or seed shared tables concurrently. Both configs previously lacked the setting and the plain commands failed; do not remove `maxWorkers`.
 
 During active development, run only the tests related to the file being changed (`npm test -- path/to/file.spec.ts`). Before declaring a task done, run the full suite — see the global `CLAUDE.md` → "Definition of Done (Technical)".
 
