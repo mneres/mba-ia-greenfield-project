@@ -128,6 +128,13 @@ Classic single-request upload, piped to storage.
 
 **Revisions:**
 - 2026-08-30 — Upload reaches the API through a same-origin reverse proxy that forwards straight to Nest without traversing the Next runtime; strict-BFF's actual invariant (the browser talks only to same-origin) is preserved and the 10GB streaming problem is solved at the deployment layer. Resolves the consequence this TD flagged for the Fase 04/05 frontend research. Rationale: Same-origin reverse proxy, bypassing the Next runtime.
+- 2026-09-02 — **Reconciliação explícita com o enunciado da fase, sem mudança de decisão.** O enunciado ilustra a estratégia esperada como *"upload direto ao storage via URL pré-assinada / multipart, **em vez de passar o arquivo pela API**"*, e a Opção A faz os bytes atravessarem o processo da API. A escolha permanece a Opção A, por três razões que a análise original já continha mas não confrontou com o texto do enunciado:
+
+  1. **O critério do enunciado é o efeito, não a topologia.** A reprova automática é *"passar o arquivo de 10GB pela API **de forma que trave o sistema** (sem estratégia de upload assíncrono/direto)"* — as duas condições são conjuntas. O tus é assíncrono e resumível, e o `@tus/s3-store` traduz o stream num multipart do S3 sem materializar o arquivo. A segunda condição não se verifica.
+  2. **A Opção B foi avaliada e recusada por um motivo do projeto, não por conveniência.** Ela exige que o browser fale direto com a origem do storage, o que contraria o strict-BFF já decidido para o frontend em `next-frontend-config-base/TD-03`. O texto original desta decisão reconhece que *"B's byte path is genuinely better"* — a recusa é um trade-off registrado, que é exatamente o que a etapa de research pede.
+  3. **A propriedade agora é medida, não argumentada.** `test/videos-upload-throughput.e2e-spec.ts` envia 24MB em 8 PATCHes enquanto bate num endpoint concorrente: a API responde 200 em todas as sondas com latência máxima na casa de dezenas de milissegundos, e o `HEAD` do tus na metade do envio reporta os bytes já persistidos no datastore — um servidor que acumulasse o arquivo responderia offset 0 ali.
+
+  **Limite honesto do que foi verificado:** o teste exercita 24MB, não 10GB, e o payload cabe numa única parte do multipart. O comportamento em escala real repousa na aritmética de partes desta decisão (50MB por parte, ~200 partes para 10GB) e no comportamento do `@tus/s3-store`, não em medição própria.
 
 ---
 
