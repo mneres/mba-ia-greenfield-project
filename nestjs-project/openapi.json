@@ -438,6 +438,108 @@
           "auth"
         ]
       }
+    },
+    "/videos/{publicId}/playback": {
+      "get": {
+        "description": "Returns a short-lived presigned GET URL. The client streams bytes directly from object storage, which serves HTTP Range natively, so the API is never in the byte path. Authentication is optional: anonymous callers reach any ready video, and the owner also reaches their own videos that are not ready yet.",
+        "operationId": "VideosController_playback",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "The 11-character base62 public identifier of the video",
+            "schema": {
+              "example": "dQw4w9WgXcQ",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned playback URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "expiresIn": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No video with that public identifier, or the video is not ready and the caller is not its owner. The two are deliberately indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get a presigned playback URL",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{publicId}/download": {
+      "get": {
+        "description": "Returns a presigned GET URL carrying a signed Content-Disposition override, so object storage itself forces the download and names the file. Kept separate from /playback rather than parameterised, because a later phase is expected to gate the two differently.",
+        "operationId": "VideosController_download",
+        "parameters": [
+          {
+            "name": "publicId",
+            "required": true,
+            "in": "path",
+            "description": "The 11-character base62 public identifier of the video",
+            "schema": {
+              "example": "dQw4w9WgXcQ",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned download URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "expiresIn": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Same resource-state gating as /playback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get a presigned download URL",
+        "tags": [
+          "videos"
+        ]
+      }
     }
   },
   "info": {

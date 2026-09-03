@@ -48,3 +48,28 @@ export class TokenReuseDetectedException extends DomainException {
     );
   }
 }
+
+export class UploadTooLargeException extends DomainException {
+  constructor(maxBytes: number) {
+    super(
+      'UPLOAD_TOO_LARGE',
+      413,
+      `Declared upload size exceeds the maximum of ${maxBytes} bytes`,
+    );
+  }
+}
+
+export class UploadQuotaExceededException extends DomainException {
+  constructor(reason: string) {
+    super('UPLOAD_QUOTA_EXCEEDED', 409, reason);
+  }
+}
+
+export class VideoNotFoundException extends DomainException {
+  constructor() {
+    // Mesma resposta para "não existe" e para "existe mas não está pronto e
+    // você não é o dono": distinguir os dois tornaria vídeos não-publicados
+    // enumeráveis (per `phase-03-videos/TD-15`).
+    super('VIDEO_NOT_FOUND', 404, 'Video not found');
+  }
+}

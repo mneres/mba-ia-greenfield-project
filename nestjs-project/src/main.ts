@@ -1,32 +1,22 @@
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import type { ConfigType } from '@nestjs/config';
-import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { DomainExceptionFilter } from './common/filters/domain-exception.filter';
-import { ValidationExceptionFilter } from './common/filters/validation-exception.filter';
+import { configureApp } from './bootstrap';
 import swaggerConfig from './config/swagger.config';
 import { buildSwaggerDocument } from './swagger/swagger-document';
 import swaggerMetadata from './metadata.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // O ingest tus precisa do corpo como stream bruto — qualquer body parser
+  // consumiria os bytes antes de o protocolo os ver (per `phase-03-videos/TD-16`).
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  configureApp(app);
+
   const configService = app.get(ConfigService);
   const port = configService.get<number>('app.port') ?? 3000;
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-
-  app.useGlobalFilters(
-    new DomainExceptionFilter(),
-    new ValidationExceptionFilter(),
-  );
 
   const swagger = app.get<ConfigType<typeof swaggerConfig>>(swaggerConfig.KEY);
 

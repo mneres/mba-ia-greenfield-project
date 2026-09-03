@@ -1,0 +1,12 @@
+FROM node:25.6.0-slim
+
+# FFmpeg vive só nesta imagem. A imagem da API permanece sem ele: é o que torna
+# o isolamento de TD-08 verificável — `ffmpeg -version` responde aqui e falha
+# no container da API.
+RUN apt update && apt install -y procps curl ffmpeg && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /home/node/app
+
+USER node
+
+CMD [ "npm", "run", "start:worker" ]

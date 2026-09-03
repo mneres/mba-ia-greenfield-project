@@ -1,6 +1,7 @@
 // @ts-check
 import eslint from '@eslint/js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
+import jest from 'eslint-plugin-jest';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
@@ -30,6 +31,19 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       "prettier/prettier": ["error", { endOfLine: "auto" }],
+    },
+  },
+  {
+    // `@typescript-eslint/unbound-method` dá falso positivo em
+    // `expect(mock.method)`: a regra base não conhece os matchers do Jest e lê
+    // a referência ao método como desanexada. `jest/unbound-method` é a
+    // substituição oficial recomendada pelo typescript-eslint — mesma
+    // checagem, ciente do contexto de teste.
+    files: ['**/*.spec.ts', '**/*.integration-spec.ts', '**/*.e2e-spec.ts'],
+    plugins: { jest },
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
+      'jest/unbound-method': 'error',
     },
   },
 );
