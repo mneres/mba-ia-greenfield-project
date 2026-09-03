@@ -8,11 +8,11 @@ More info in the project overview: [docs/project-plan.md](docs/project-plan.md)
 
 ## Repository Structure
 
-This is a monorepo with two main areas:
+This is a monorepo:
 
-- `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Contains modules for users, channels, videos, comments, etc.
-- `docs/` — Project documentation, architecture diagrams, and planning.
-- `next-frontend/` (Next.js) — not yet initialized
+- `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Modules delivered so far: `auth`, `users`, `channels`, `mail`, `videos`, plus `common`, `config`, `database`, `storage` and `swagger`. The background video worker lives in `src/worker/` and runs as its own container from `Dockerfile.worker`.
+- `next-frontend/` — Frontend (Next.js), delivered through Phase 02. Out of scope for Phase 03, which is backend-only.
+- `docs/` — Project documentation, architecture diagrams, decisions and phase planning.
 
 ## Architecture (C4 Container Diagram)
 
@@ -25,6 +25,18 @@ See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 - **Object Storage** (S3/MinIO) → two buckets: `streamtube-videos` (private, source files) and `streamtube-thumbnails` (public-read) (`phase-03-videos/TD-02`)
 - **Message Queue** (BullMQ over Redis) → video processing job queue, plus the hourly abandoned-upload reaper (`phase-03-videos/TD-07`, `TD-17`)
 - **Email Service** (SMTP) → account confirmation and password recovery
+
+## Videos (Phase 03)
+
+Backend-only phase. Full detail — module layout, endpoints, storage keys, queue and worker — is in `nestjs-project/CLAUDE.md` → "Videos (Phase 03)". The shape at a glance:
+
+- **Ingest:** tus 1.0.0 resumable upload mounted as a Nest controller route, streamed straight into an S3 multipart upload. Bytes are never buffered; the 10 GB ceiling, the per-channel quota and the draft row are all enforced in `onUploadCreate`, before a single byte is stored.
+- **Processing:** completion enqueues `video.process` on a BullMQ queue, deduplicated per video. The `video-worker` container runs `ffprobe` and `ffmpeg` — installed only in that image — to extract metadata and a thumbnail, then moves the video to `ready`.
+- **Lifecycle:** `draft → uploading → processing → ready | failed`. `ready` and `failed` are terminal; a failed video keeps its row and its public id as evidence of the attempt.
+- **Delivery:** `GET /videos/{publicId}/playback` and `/download` return short-lived presigned URLs. The client streams bytes directly from object storage, which serves HTTP Range natively, so the API is never in the byte path. Access is gated on resource state, not identity.
+- **Reaping:** an hourly job reclaims abandoned multipart uploads and fails the rows left waiting for bytes.
+
+Decisions and their trade-offs are in `docs/decisions/technical-decisions-phase-03-videos.md`; the executable plan and its progress are in `docs/phases/phase-03-videos/`.
 
 ## Docker Networking
 

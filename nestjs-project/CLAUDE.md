@@ -13,6 +13,11 @@ docker compose ps   # all services must show status "running"
 Then verify each infrastructure service is actually ready to accept connections — not just running:
 
 - **PostgreSQL:** `docker compose exec db pg_isready -U streamtube` — expect `accepting connections`
+- **MinIO:** `docker compose exec minio mc ready local` — expect no error
+- **Redis:** `docker compose exec redis redis-cli ping` — expect `PONG`
+- **Video worker:** `docker compose logs video-worker` — expect `Video worker started`
+
+`minio`, `redis` and `video-worker` are part of "start the environment": the API declares `depends_on` with `condition: service_healthy` on the first two, and the worker is what drains the processing queue.
 
 Only start the NestJS dev server (`npm run start:dev`) when the user **explicitly** asks to run the application — never as part of "start the environment".
 
@@ -34,6 +39,10 @@ docker compose exec nestjs-api npm run start:dev
 Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `mailpit` — SMTP capture, SMTP `1025`, web UI `8025`
+- `minio` — S3-compatible object storage, API `9000`, console `9001`, user/password `streamtube`
+- `redis` — Redis 8, port `6379`, backs the BullMQ queue
+- `video-worker` — background processor built from `Dockerfile.worker`; no HTTP port. **FFmpeg is installed only in this image**
 
 All verification and teardown commands run on the **host machine**:
 
@@ -175,6 +184,61 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 
 - Each domain feature gets its own module (e.g., `UsersModule`, `VideosModule`) registered in `AppModule`
 - Controllers handle HTTP routing; Services hold business logic; both are scoped to their module
+
+## Videos (Phase 03)
+
+Upload, background processing and delivery of videos. Every video belongs to a channel, and every user has exactly one channel.
+
+### Module layout — `src/videos/`
+
+| File | Role |
+|---|---|
+| `entities/video.entity.ts` | `Video` entity; `VideoStatus` enum (`draft`, `uploading`, `processing`, `ready`, `failed`) |
+| `videos.service.ts` | State machine (`canTransition`, `transition`, `markUploading`), `create` with retry-on-conflict, `resolveForDelivery` |
+| `videos.controller.ts` | `GET /videos/:publicId/playback` and `/download` |
+| `upload.controller.ts` | tus protocol surface, `@All(['videos/upload', 'videos/upload/*splat'])` |
+| `upload.service.ts` | tus `Server` + lifecycle hooks (`onUploadCreate`, `onUploadFinish`, `onResponseError`) |
+| `upload-quota.service.ts` | Per-channel concurrency and aggregate-bytes limits |
+| `video-queue.service.ts` | Producer side of the `video-processing` queue |
+| `tus-store.factory.ts` | Single source for the `S3Store` config, shared with the worker |
+| `public-id.util.ts` | 11-char base62 id with rejection sampling |
+| `delivery-filename.util.ts` | Sanitised filename for the download `Content-Disposition` |
+| `videos.constants.ts` | Queue/job names, tus mount path, part sizing, job options |
+
+The worker lives in `src/worker/` (`worker.module.ts`, `main.worker.ts`, `video.processor.ts`, `reaper.processor.ts`, `ffmpeg.util.ts`) and runs in its own container.
+
+### Endpoints
+
+| Method | Route | Auth | Notes |
+|---|---|---|---|
+| `POST` / `HEAD` / `PATCH` / `DELETE` | `/videos/upload[/:id]` | Bearer required | tus 1.0.0. Excluded from Swagger (`@ApiExcludeController`) — the contract is the tus protocol, not REST. Carries `@SkipThrottle()` |
+| `GET` | `/videos/:publicId/playback` | Optional | Presigned GET URL + `expiresIn` |
+| `GET` | `/videos/:publicId/download` | Optional | Presigned URL with a signed `attachment` disposition |
+
+Both delivery endpoints are `@Public()` + `@OptionalAuth()`: anonymous callers reach any `ready` video, and the owner also reaches their own videos that are not ready yet. Anything else answers `404 VIDEO_NOT_FOUND` — never `403`, so unpublished videos cannot be enumerated.
+
+### Upload path
+
+Bytes never buffer in memory: `@tus/s3-store` translates the tus chunk stream into an S3 multipart upload (50 MB parts, ~200 for a 10 GB file). The route is mounted as a Nest controller so the global guard pipeline stays active, which is why `main.ts` creates the app with `bodyParser: false` and re-applies JSON parsing to every other route through `src/bootstrap.ts`.
+
+`onUploadCreate` is where the defence lives — size ceiling, quota, and the draft row — because it is the only point that runs *before* any byte is stored.
+
+### Processing
+
+`onUploadFinish` transitions the video to `processing` and enqueues `video.process` on the `video-processing` queue with `deduplication: { id: videoId }`, so a retried final `PATCH` does not trigger a second transcode.
+
+The `video-worker` container consumes it: `ffprobe` for duration/dimensions/full metadata, then a thumbnail at 10% of the duration scaled to 1280 wide, written to the public bucket. Success → `ready`; a file with no video stream → `failed` immediately (unrecoverable); transient failures retry three times before `failed`.
+
+The same queue carries the hourly `reap` job, dispatched by `job.name` inside `VideoProcessor` — a second `@Processor` on the same queue would create a competing Worker.
+
+### Storage layout
+
+- `streamtube-videos` (private): `videos/{videoId}/source{ext}` — the tus upload id **is** this key
+- `streamtube-thumbnails` (public-read): `thumbnails/{videoId}/auto.jpg`
+
+Keys derive from the internal UUID, never from `public_id`, so a shared link reveals nothing about storage paths. They are deterministic, which is what makes a retried job overwrite instead of duplicate.
+
+Presigned URLs are signed against `STORAGE_PUBLIC_ENDPOINT`, not the Compose-internal one — SigV4 signs the `Host` header, so a URL signed against `minio:9000` is invalid outside the Compose network. The reverse also holds: **a presigned URL is not reachable from inside a container**, which is why the delivery integration spec signs against the internal endpoint to exercise Range and `Content-Disposition`.
 
 ## Code Conventions
 
